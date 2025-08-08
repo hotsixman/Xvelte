@@ -1,1 +1,0 @@
-import {mount} from 'svelte'; window.__mount__ = mount;

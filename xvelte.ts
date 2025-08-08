@@ -1,12 +1,16 @@
-import { Plugin } from "vite";
+import { type Plugin } from "vite";
 import path from 'node:path';
 import { compile } from "svelte/compiler";
 import { createHash } from "node:crypto";
 import { build } from "esbuild";
 import { default as esbuildSvelte } from "esbuild-svelte";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { XvelteApp } from "../../XvelteApp.js";
+import fs from "node:fs";
+import { XvelteApp } from "./src/framework/XvelteApp"
 
+/**
+ * @todo 개발서버 일 때, client 컴포넌트들을 별도의 폴더에 번들링하여 저장해놓기
+ * @returns 
+ */
 export default function xvelte(): Plugin {
     function generateHash(text: string) {
         return createHash('sha-256').update(text).digest('hex');
@@ -23,7 +27,7 @@ export default function xvelte(): Plugin {
                     ...config,
                     build: {
                         rollupOptions: {
-                            input: existsSync('app.js') ? 'app.js' : 'app.ts',
+                            input: fs.existsSync('app.js') ? 'app.js' : 'app.ts',
                             output: {
                                 entryFileNames: 'app.js',
                                 manualChunks(id) {
@@ -55,15 +59,18 @@ export default function xvelte(): Plugin {
                 clientSvelteFilePaths.push(id);
                 return `const path = "/__client__/${generateHash(id)}.js"; export default path;`
             }
+            else if (id.endsWith('.html')) {
+                return `const html = ${JSON.stringify(code)}; export default html;`;
+            }
             else {
                 return null;
             }
         },
         async writeBundle(options) {
-            if (!existsSync(path.resolve(options.dir ?? '', '__client__'))) {
-                mkdirSync(path.resolve(options.dir ?? '', '__client__'), { recursive: true });
+            if (!fs.existsSync(path.resolve(options.dir ?? '', '__client__'))) {
+                fs.mkdirSync(path.resolve(options.dir ?? '', '__client__'), { recursive: true });
             }
-            writeFileSync(path.resolve(options.dir ?? '', '__client__', '_svelte.js'), "import {mount} from 'svelte'; window.__mount__ = mount;", 'utf-8');
+            fs.writeFileSync(path.resolve(options.dir ?? '', '__client__', '_svelte.js'), "import {mount} from 'svelte'; window.__mount__ = mount;", 'utf-8');
 
             const entryPoints: Record<string, string> = {
                 [path.resolve(options.dir ?? '', '__client__', 'svelte')]: path.resolve(options.dir ?? '', '__client__', '_svelte.js')
@@ -73,7 +80,6 @@ export default function xvelte(): Plugin {
             });
             await build({
                 entryPoints,
-                //@ts-expect-error
                 plugins: [esbuildSvelte({
                     compilerOptions: {
                         css: 'injected'

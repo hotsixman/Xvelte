@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import xvelte from "./src/framework/vite/plugin/xvelte.js";
+import xvelte from './xvelte'
 
 export default defineConfig({
     plugins: [xvelte()]
