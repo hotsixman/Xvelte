@@ -17,9 +17,8 @@
     },
     "include": [
         "xvelte.ts",
-        "app.ts",
-        "vite-env.d.ts",
         "src/**/*.ts",
+        "src/**/*.d.ts",
         "src/**/*.svelte"
     ],
 }

@@ -9,8 +9,6 @@
     const randomId = 'a' + Math.floor(Math.random() * 1000000).toString(16);
 </script>
 
-<div id="test"></div>
-
 <svelte:element this={"script"} type="module">
     import Component from '{component}';
     window.__mount__(Component, {`{
