@@ -1,0 +1,26 @@
+{
+    "compilerOptions": {
+        "allowJs": true,
+        "checkJs": false,
+        "esModuleInterop": true,
+        "forceConsistentCasingInFileNames": true,
+        "resolveJsonModule": true,
+        "skipLibCheck": true,
+        "sourceMap": true,
+        "strict": true,
+        "moduleResolution": "bundler",
+        "module": "esnext",
+        "target": "esnext",
+        "isolatedModules": true,
+        "moduleDetection": "force",
+        "verbatimModuleSyntax": true,
+        "outDir": "dist"
+    },
+    "include": [
+        "index.ts",
+        "components.ts",
+        "src/**/*.ts",
+        "src/**/*.d.ts",
+        "src/**/*.svelte"
+    ],
+}
