@@ -14,25 +14,25 @@ if (typeof (process.env.isDev) === "undefined") {
 
 export class XvelteApp {
     private template: string;
-    private pageHandlerMap = new Map<string, PageHandler<any, any>>();
-    private pagePatternHandlerMap = new Map<pathToRegexp.MatchFunction<pathToRegexp.ParamData> | RegExp, PageHandler<any, any>>();
+    private pageHandlerMap = new Map<string, PageHandler<any, any, any>>();
+    private pagePatternHandlerMap = new Map<pathToRegexp.MatchFunction<pathToRegexp.ParamData> | RegExp, PageHandler<any, any, any>>();
 
     constructor(template: string) {
         this.template = template;
     }
 
-    page<Route extends string | RegExp, Props extends Record<string, any>>(route: Route, handler: PageHandler<Route, Props>) {
+    page<Route extends string | RegExp, Props extends Record<string, any>, LayoutProps extends Record<string, any>[]>(route: Route, handler: PageHandler<Route, Props, LayoutProps>) {
         if (typeof (route) === "string") {
             let route_: string = route;
-            while(route_.endsWith('/')){
+            while (route_.endsWith('/')) {
                 route_ = route_.slice(0, -1);
             }
-            
+
             const pathRegexp = pathToRegexp.pathToRegexp(route_);
-            if(pathRegexp.keys.length === 0){
+            if (pathRegexp.keys.length === 0) {
                 this.pageHandlerMap.set(route_, handler);
             }
-            else{
+            else {
                 this.pagePatternHandlerMap.set(pathToRegexp.match(route_), handler);
             }
         }
@@ -42,18 +42,18 @@ export class XvelteApp {
     }
 
     async handle(req: IncomingMessage, res: ServerResponse) {
-        if(!req.url){
+        if (!req.url) {
             res.statusCode = 404;
             return res.end();
         }
-        else{
-            while(req.url.endsWith('/')){
+        else {
+            while (req.url.endsWith('/')) {
                 req.url = req.url?.slice(0, -1);
             }
         }
 
-        if(await this.sendXvelteClientFile(req, res)) return;
-        if(await this.sendPage(req, res)) return;
+        if (await this.sendXvelteClientFile(req, res)) return;
+        if (await this.sendPage(req, res)) return;
 
         res.statusCode = 404;
         return res.end('404 Error');
@@ -90,38 +90,38 @@ export class XvelteApp {
         return false;
     }
 
-    private async sendPage(req: IncomingMessage & {url: string}, res: ServerResponse): Promise<boolean> {
-        let handler: PageHandler<any, any> | null = this.pageHandlerMap.get(req.url) ?? null;
+    private async sendPage(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+        let handler: PageHandler<any, any, any> | null = this.pageHandlerMap.get(req.url) ?? null;
         let params: Record<string, any> | null = null;
-        if(!handler){
-            for(const [pattern, handler_] of this.pagePatternHandlerMap.entries()){
-                if(typeof(pattern) === "function"){
+        if (!handler) {
+            for (const [pattern, handler_] of this.pagePatternHandlerMap.entries()) {
+                if (typeof (pattern) === "function") {
                     const matched = pattern(req.url);
-                    if(matched){
+                    if (matched) {
                         params = matched.params;
                         handler = handler_;
                     }
                 }
-                else{
-                    if(pattern.test(req.url)){
+                else {
+                    if (pattern.test(req.url)) {
                         handler = handler_;
                     }
                 }
             }
         }
 
-        if(!handler) return false;
+        if (!handler) return false;
 
         const pageHandleData = await handler({
             params: params ?? undefined
         });
 
-        if(!pageHandleData){
+        if (!pageHandleData) {
             return res.writableEnded;
         }
 
         const dom = parseHtml(this.template);
-        const renderedComponent = render(pageHandleData.component, {props: pageHandleData.props});
+        const renderedComponent = render(pageHandleData.component, { props: pageHandleData.props });
 
         const xvelteHead = dom.querySelector('xvelte-head');
         if (xvelteHead) {
@@ -150,17 +150,15 @@ type RequestEvent<Route extends string | RegExp> = {
 }
 type RequestHandler<Route extends string | RegExp> = (event: RequestEvent<Route>) => MaybePromise<Response | null>;
 
-
-type PageHandler<Route extends string | RegExp, Props extends Record<string, any>> = (event: RequestEvent<Route>) => MaybePromise<PageHandleData<Props> | null>;
-type PageHandleData<Props extends Record<string, any>> = {
+type PageHandler<Route extends string | RegExp, Props extends Record<string, any>, LayoutProps extends Record<string, any>[]> = (event: RequestEvent<Route>) => MaybePromise<PageHandleData<Props, LayoutProps> | null>;
+type PageHandleData<Props extends Record<string, any>, LayoutProps extends Record<string, any>[]> = {
     layouts?: {
-        component: Component,
-        props?: Record<string, any>
-    }[],
+        [Key in keyof LayoutProps]: {
+            component: Component<LayoutProps[Key]>,
+        } & ({} extends LayoutProps[Key] ? {props?: LayoutProps[Key]} : {props: LayoutProps[Key]})
+    },
     component: Component<Props>,
-    props?: Props
-}
-
+} & ({} extends Props ? {props?: Props} : {props: Props})
 
 type RouteParams<T extends string> =
     string extends T
@@ -170,5 +168,5 @@ type RouteParams<T extends string> =
     : T extends `${string}:${infer Param}`
     ? { [K in Param]: string }
     : {};
-type IncomingMessage = IncomingMessage_ & {url: string};
+type IncomingMessage = IncomingMessage_ & { url: string };
 type MaybePromise<T> = T | Promise<T>

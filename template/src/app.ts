@@ -18,5 +18,3 @@ export default app;
 if(!process.env.isDev){
     app.listen();
 }
-
-
