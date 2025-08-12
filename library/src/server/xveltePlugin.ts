@@ -1,11 +1,10 @@
-import { type Plugin } from "vite";
+import type { Plugin } from "vite";
 import path from 'node:path';
 import { compile } from "svelte/compiler";
 import { createHash } from "node:crypto";
 import { build } from "esbuild";
-import { default as esbuildSvelte } from "esbuild-svelte";
 import fs from "node:fs";
-import { XvelteApp } from "./XvelteApp"
+import { XvelteApp } from "./XvelteApp";
 
 /**
  * @todo 개발서버 일 때, client 컴포넌트들을 별도의 폴더에 번들링하여 저장해놓기
@@ -57,7 +56,7 @@ export default function xveltePlugin(): Plugin {
             }
         },
         async resolveId(id) {
-            if (id.startsWith('/__client__')) {
+            if (id.startsWith('/__xvelte__/client')) {
                 return {
                     id,
                     external: true
@@ -65,7 +64,7 @@ export default function xveltePlugin(): Plugin {
             }
         },
         async load(id) {
-            if (id.startsWith('/__client__')) {
+            if (id.startsWith('/__xvelte__/client')) {
                 return {
                     code: ''
                 }
@@ -77,7 +76,7 @@ export default function xveltePlugin(): Plugin {
             }
             else if (id.endsWith('.svelte?client')) {
                 clientSvelteFilePaths.add(id);
-                return `const path = "/__client__/${generateHash(id)}.js"; export default path;`
+                return `const path = "/__xvelte__/client/${generateHash(id)}.js"; export default path;`
             }
             else if (id.endsWith('.html')) {
                 return `const html = ${JSON.stringify(code)}; export default html;`;
@@ -87,7 +86,7 @@ export default function xveltePlugin(): Plugin {
             }
         },
         async writeBundle(options) {
-            await buildClientComponents(path.resolve(options.dir || ''));
+            await buildClientComponents(path.resolve(path.join(options.dir || '', '__xvelte__')));
         },
         async configureServer(server) {
             server.middlewares.use(async (req, res, next) => {
@@ -121,36 +120,47 @@ export default function xveltePlugin(): Plugin {
         }
     }
 
-    function clientComponentBuildOption() {
-        return {
-            plugins: [esbuildSvelte({
-                compilerOptions: {
-                    css: 'injected'
-                }
-            })],
+    async function buildClientComponents(dir: string) {
+        const {default: esbuildSvelte} = await import('esbuild-svelte');
+        const xvelteClientScriptPath = path.resolve(import.meta.dirname, '..', 'client', 'xvelte.ts');
+
+        if (!fs.existsSync(path.resolve(dir, 'client'))) {
+            fs.mkdirSync(path.resolve(dir, 'client'), { recursive: true });
+        }
+        fs.writeFileSync(path.resolve(dir, 'client', '_svelte.js'), "import {mount} from 'svelte'; window.__mount__ = mount;", 'utf-8');
+
+        const entryPoints: Record<string, string> = {
+            [path.resolve(dir, 'client', 'svelte')]: xvelteClientScriptPath
+        };
+        clientSvelteFilePaths.forEach((original) => {
+            entryPoints[path.resolve(dir, 'client', generateHash(original))] = original;
+        });
+        await build({
             format: 'esm' as const,
             platform: 'browser' as const,
             bundle: true,
-            splitting: true
-        }
-    }
-
-    async function buildClientComponents(dir: string) {
-        if (!fs.existsSync(path.resolve(dir, '__client__'))) {
-            fs.mkdirSync(path.resolve(dir, '__client__'), { recursive: true });
-        }
-        fs.writeFileSync(path.resolve(dir, '__client__', '_svelte.js'), "import {mount} from 'svelte'; window.__mount__ = mount;", 'utf-8');
-
-        const entryPoints: Record<string, string> = {
-            [path.resolve(dir, '__client__', 'svelte')]: path.resolve(dir, '__client__', '_svelte.js')
-        };
-        clientSvelteFilePaths.forEach((original) => {
-            entryPoints[path.resolve(dir, '__client__', generateHash(original))] = original;
-        });
-        await build({
-            ...clientComponentBuildOption(),
+            splitting: true,
             entryPoints,
-            outdir: path.resolve(dir, '__client__'),
+            outdir: path.resolve(dir, 'client'),
+            plugins: [
+                esbuildSvelte({
+                    compilerOptions: {
+                        css: 'injected'
+                    }
+                }),
+                {
+                    name: 'xvelte',
+                    setup(build) {
+                        build.onResolve({ filter: /.*/ }, (args) => {
+                            if (args.importer && args.importer === xvelteClientScriptPath) {
+                                if (args.path === "svelte") {
+                                    return { path: path.resolve(process.cwd(), 'node_modules', 'svelte', 'src', 'index-client.js') };
+                                }
+                            }
+                        })
+                    }
+                }
+            ]
         });
         devFileChanged = false;
         clientSvelteFilePaths.clear();

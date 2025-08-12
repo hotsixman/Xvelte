@@ -1,11 +1,17 @@
-import { XvelteApp } from "../../library/index"
+import XvelteApp from "../../library/index"
 import template from './app.html?raw';
 import Index from './page/index/index.svelte';
+import Layout from "./page/index/Layout.svelte";
 import Test from "./page/test/test.svelte";
 
 const app = new XvelteApp(template);
 
-app.page('/', () => ({component: Index}));
+app.page('/', () => ({
+    layouts: [{
+        component: Layout
+    }],
+    component: Index
+}));
 app.page('/test', async () => ({
     component: Test,
     props: {

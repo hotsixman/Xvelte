@@ -1,7 +1,3 @@
-import xveltePlugin from './src/xveltePlugin';
-import { XvelteApp } from './src/XvelteApp';
+import { XvelteApp } from "./src/server/XvelteApp";
 
-export {
-    xveltePlugin,
-    XvelteApp
-}
+export default XvelteApp;
