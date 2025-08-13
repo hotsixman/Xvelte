@@ -14,3 +14,8 @@
 <Text />
 <Island component={TextClient} />
 테스트
+
+<form method="post" action="/get/asd">
+    <input name="foo" type="file">
+    <button type="submit">제출</button>
+</form>

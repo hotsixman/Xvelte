@@ -1,6 +1,2 @@
-export type FragData = {
-    id: string;
-    headStart: Comment,
-    headEnd: Comment,
-    body: HTMLElement
-}
+export type * from './client/types';
+export type * from './server/types';

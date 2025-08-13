@@ -18,6 +18,10 @@ app.page('/test', async () => ({
         time: 'asd'
     }
 }));
+app.get('/get/:id', async(event) => {
+    event.setCookie('foo', 'bar', {path: '/'});
+    return 'response'
+})
 
 export default app;
 
