@@ -1,3 +1,4 @@
 import Island from './src/components/Island.svelte';
-export { Island };
+import Slot from './src/components/Slot.svelte';
+export { Island, Slot };
 //# sourceMappingURL=components.js.map

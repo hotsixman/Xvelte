@@ -1,39 +1,27 @@
-import type { ServerResponse } from "node:http";
-import { HTMLElement, parse as parseHtml } from 'node-html-parser'
+import { HTMLElement, parse as parseHtml } from 'node-html-parser';
 import { render } from "svelte/server";
-import type { Component } from "svelte";
-import express, { type Handler } from 'express';
+import express, {} from 'express';
 import fs, { ReadStream } from 'node:fs';
 import path from "node:path";
-import mime from 'mime-types'
+import mime from 'mime-types';
 import pathToRegexp from "path-to-regexp";
 import cookie from 'cookie';
-import type { PageHandler, IncomingMessage, PageHandleData, RequestHandler, AnyPageHandler, AnyRequestHandler, RouteParams, XvelteResponse, AnyRequestEvent } from "./types";
-import { hash } from "node:crypto";
-
 if (typeof (process.env.isDev) === "undefined") {
     process.env.isDev = false;
 }
-
 export class XvelteApp {
-    private template: string;
-
-    private pageHandlerMap = new Map<string, AnyPageHandler>();
-    private pagePatternHandlerMap = new Map<pathToRegexp.MatchFunction<pathToRegexp.ParamData> | RegExp, AnyPageHandler>();
-
-    private requestHandlerMap = new Map<string, AnyRequestHandler>();
-    private requestPatternHandlerMap = new Map<pathToRegexp.MatchFunction<pathToRegexp.ParamData> | RegExp, AnyRequestHandler>();
-
-    private componentIdMap = new ComponentIdMap();
-
-    constructor(template: string) {
+    template;
+    pageHandlerMap = new Map();
+    pagePatternHandlerMap = new Map();
+    requestHandlerMap = new Map();
+    requestPatternHandlerMap = new Map();
+    componentIdMap = new ComponentIdMap();
+    constructor(template) {
         this.template = template;
     }
-
-    page<Route extends string | RegExp, Props extends Record<string, any>, LayoutProps extends Record<string, any>[]>(route: Route, handler: PageHandler<Route, Props, LayoutProps>) {
+    page(route, handler) {
         if (typeof (route) === "string") {
-            const route_ = pathify(route)
-
+            const route_ = pathify(route);
             const pathRegexp = pathToRegexp.pathToRegexp(route_);
             if (pathRegexp.keys.length === 0) {
                 this.pageHandlerMap.set(route_, handler);
@@ -46,47 +34,43 @@ export class XvelteApp {
             this.pagePatternHandlerMap.set(route, handler);
         }
     }
-
-    get<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>) {
+    get(route, handler) {
         this.registerRequestHandler(route, handler, 'get');
     }
-    post<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>) {
+    post(route, handler) {
         this.registerRequestHandler(route, handler, 'post');
     }
-    put<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>) {
+    put(route, handler) {
         this.registerRequestHandler(route, handler, 'put');
     }
-    delete<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>) {
+    delete(route, handler) {
         this.registerRequestHandler(route, handler, 'delete');
     }
-    all<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>) {
+    all(route, handler) {
         this.registerRequestHandler(route, handler, 'all');
     }
-
-    async handle(req: IncomingMessage, res: ServerResponse) {
+    async handle(req, res) {
         const event = new RequestEvent(req);
-        if (await this.sendResponse(event, await this.getXvelteClientFileResponse(event), res)) return;
-        if (await this.sendResponse(event, await this.getNavigationResponse(event), res)) return;
-
+        if (await this.sendResponse(event, await this.getXvelteClientFileResponse(event), res))
+            return;
+        if (await this.sendResponse(event, await this.getNavigationResponse(event), res))
+            return;
         const { handler, params, isPageHandler } = this.getHandler(event.url.pathname);
         event.params = params;
-
         if (handler) {
-            let response: XvelteResponse;
+            let response;
             if (isPageHandler) {
-                response = await this.getPageResponse(event, handler)
+                response = await this.getPageResponse(event, handler);
             }
             else {
                 response = await handler(event);
             }
-
-            if (await this.sendResponse(event, response, res)) return;
+            if (await this.sendResponse(event, response, res))
+                return;
         }
-
         res.statusCode = 404;
         return res.end('404 Error');
     }
-
     listen() {
         const expressApp = express();
         expressApp.use((req, res) => {
@@ -94,35 +78,29 @@ export class XvelteApp {
         });
         expressApp.listen(3000);
     }
-
-    private getHandler(path: string) {
-        let handler: AnyPageHandler | AnyRequestHandler | null = null;
-        let params: Record<string, string> = {};
-
-        let c: { handler: AnyPageHandler | AnyRequestHandler | null, params: Record<string, string> } = this.getPageHandler(path);
+    getHandler(path) {
+        let handler = null;
+        let params = {};
+        let c = this.getPageHandler(path);
         handler = c.handler;
         params = c.params;
         if (handler) {
-            return { handler, params, isPageHandler: true } as { handler: AnyPageHandler, params: Record<string, string>, isPageHandler: true };
+            return { handler, params, isPageHandler: true };
         }
-
         c = this.getRequestHandler(path);
         handler = c.handler;
         params = c.params;
         if (handler) {
-            return { handler, params, isPageHandler: false } as { handler: AnyRequestHandler, params: Record<string, string>, isPageHandler: false };
+            return { handler, params, isPageHandler: false };
         }
-
-        return { handler, params, isPageHandler: false } as { handler: null, params: Record<string, string>, isPageHandler: false };
+        return { handler, params, isPageHandler: false };
     }
-
-    private getPageHandler(path: string) {
-        let handler: AnyPageHandler | null = null;
-        let params: Record<string, any> = {};
-
+    getPageHandler(path) {
+        let handler = null;
+        let params = {};
         handler = this.pageHandlerMap.get(path) ?? null;
-        if (handler) return { handler, params };
-
+        if (handler)
+            return { handler, params };
         for (const [pattern, handler_] of this.pagePatternHandlerMap.entries()) {
             if (typeof (pattern) === "function") {
                 const matched = pattern(path);
@@ -139,13 +117,12 @@ export class XvelteApp {
         }
         return { handler, params };
     }
-
-    private getRequestHandler(path: string) {
-        let handler: AnyPageHandler | AnyRequestHandler | null = null;
-        let params: Record<string, any> = {};
+    getRequestHandler(path) {
+        let handler = null;
+        let params = {};
         handler = this.requestHandlerMap.get(path) ?? null;
-        if (handler) return { handler, params };
-
+        if (handler)
+            return { handler, params };
         for (const [pattern, handler_] of this.requestPatternHandlerMap.entries()) {
             if (typeof (pattern) === "function") {
                 const matched = pattern(path);
@@ -160,24 +137,21 @@ export class XvelteApp {
                 }
             }
         }
-        return { handler, params }
+        return { handler, params };
     }
-
     /**
      * `XvelteResponse`를 전송합니다. 전송이 완료되면 true, 그렇지 않으면 false를 반환합니다.
      * false를 반환할 경우 handle 메소드에서 다음 단계로 넘어갑니다.
      */
-    private async sendResponse(event_: AnyRequestEvent, response: XvelteResponse, res: ServerResponse) {
+    async sendResponse(event_, response, res) {
         if (response === false) {
             return false;
         }
-
-        const event = event_ as unknown as NotPrivateRequestEvent<any>;
+        const event = event_;
         res.writeHead(event.responseStatus, {
             ...event.responseHeader,
             'set-cookie': Object.values(event.responseCookie)
-        })
-
+        });
         if (response instanceof ArrayBuffer) {
             res.end(Buffer.from(response));
             return true;
@@ -214,25 +188,22 @@ export class XvelteApp {
             res.end(response.toString());
             return true;
         }
-
-        for await (const chunk of (response as AsyncIterable<Uint8Array> | Iterable<Uint8Array>)) {
+        for await (const chunk of response) {
             res.write(Buffer.from(chunk));
         }
         res.end();
         return true;
     }
-
     /**
     * 클라이언트 스크립트와 클라이언트 컴포넌트 파일 전송
     */
-    private async getXvelteClientFileResponse(event: AnyRequestEvent): Promise<XvelteResponse> {
+    async getXvelteClientFileResponse(event) {
         if (event.url.pathname.startsWith('/__xvelte__/client')) {
             const filePath = process.env.isDev ? path.join(process.cwd(), '.xvelte', event.url.pathname.replace(/\/__xvelte__\//, '')) : path.join(import.meta.dirname, event.url.pathname);
             if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
                 event.setStatus(404);
                 return null;
             }
-
             const mimeType = mime.contentType(path.basename(filePath));
             if (mimeType) {
                 event.setHeader('content-type', mimeType);
@@ -242,67 +213,49 @@ export class XvelteApp {
         }
         return false;
     }
-
     /**
      * 페이지 핸들러로 렌더링
      */
-    private renderPage(data: PageHandleData<any, any>) {
-        const context = new Map<string, any>();
-
+    renderPage(data) {
+        const context = new Map();
         const layouts = (data.layouts ?? []).map((l) => {
-            const id = this.componentIdMap.register(l.component);
             const rendered = render(l.component, {
                 props: l.props,
                 context
             });
-            const dom = parseHtml(rendered.body, { comment: true });
-            dom.querySelectorAll('xvelte-island').forEach((island) => {
-                island.setAttribute('data-frag-id', id);
-            })
             return {
-                id,
+                id: this.componentIdMap.register(l.component),
                 head: rendered.head,
-                body: dom.innerHTML
-            }
+                body: rendered.body
+            };
         });
-
-        const id = this.componentIdMap.register(data.component);
         const rendered = render(data.component, {
             props: data.props,
             context
         });
-        const dom = parseHtml(rendered.body, { comment: true });
-        dom.querySelectorAll('xvelte-island').forEach((island) => {
-            island.setAttribute('data-frag-id', id);
-        })
         const page = {
             id: this.componentIdMap.register(data.component),
             head: rendered.head,
-            body: dom.innerHTML
+            body: rendered.body
         };
-
-        return { layouts, page }
+        return { layouts, page };
     }
-
     /**
      * 페이지 전송(html)
      */
-    private async getPageResponse(event: AnyRequestEvent, handler: AnyPageHandler): Promise<XvelteResponse> {
+    async getPageResponse(event, handler) {
         const pageHandleData = await handler(event);
         if (!pageHandleData) {
             return null;
         }
-
         const rendered = this.renderPage(pageHandleData);
         const dom = parseHtml(this.template, { comment: true });
-
         const xvelteHead = dom.querySelector('xvelte-head');
         if (xvelteHead) {
             const newXvelteHead = parseHtml('<!--xvelte-head-->', { comment: true });
             if (process.env.isDev) {
                 newXvelteHead.innerHTML += '<script type="module" src="/@vite/client"></script>';
             }
-            newXvelteHead.innerHTML += `<style>${XvelteApp.css}</style>`;
             newXvelteHead.innerHTML += '<script type="module" src="/__xvelte__/client/svelte.js"></script>';
             [...rendered.layouts, rendered.page].forEach((layout) => {
                 const frag = parseHtml(`<!--xvelte-headfrag-${layout.id}-->`, { comment: true });
@@ -313,60 +266,54 @@ export class XvelteApp {
             newXvelteHead.innerHTML += '<!--/xvelte-head-->';
             xvelteHead.replaceWith(newXvelteHead);
         }
-
         const xvelteBody = dom.querySelector('xvelte-body');
         if (xvelteBody) {
             if (rendered.layouts.length > 0) {
-                const topLayoutFrag = parseHtml(`<xvelte-frag data-frag-id="${rendered.layouts[0].id}">${rendered.layouts[0].body}</xvelte-frag>`).children[0] as HTMLElement;
+                const topLayoutFrag = parseHtml(`<xvelte-frag data-component-id="${rendered.layouts[0].id}">${rendered.layouts[0].body}</xvelte-frag>`).children[0];
                 let frag = topLayoutFrag;
-
                 for (let i = 1; i < rendered.layouts.length; i++) {
                     const layout = rendered.layouts[i];
-
                     const slot = frag.getElementsByTagName('xvelte-slot')[0];
                     if (slot) {
-                        frag = parseHtml(`<xvelte-frag data-frag-id="${layout.id}">${layout.body}</xvelte-frag>`).children[0] as HTMLElement;
+                        frag = parseHtml(`<xvelte-frag data-component-id="${layout.id}">${layout.body}</xvelte-frag>`).children[0];
                         slot.replaceWith(frag);
                     }
                 }
-
                 const slot = frag.getElementsByTagName('xvelte-slot')[0];
                 if (slot) {
-                    frag = parseHtml(`<xvelte-frag data-frag-id="${rendered.page.id}">${rendered.page.body}</xvelte-frag>`).children[0] as HTMLElement;
+                    frag = parseHtml(`<xvelte-frag data-component-id="${rendered.page.id}">${rendered.page.body}</xvelte-frag>`).children[0];
                     slot.replaceWith(frag);
-                };
+                }
+                ;
                 xvelteBody.innerHTML = topLayoutFrag.outerHTML;
             }
             else {
-                const frag = parseHtml(`<xvelte-frag data-frag-id="${rendered.page.id}">${rendered.page.body}</xvelte-frag>`);
+                const frag = parseHtml(`<xvelte-frag data-component-id="${rendered.page.id}">${rendered.page.body}</xvelte-frag>`);
                 xvelteBody.innerHTML = frag.innerHTML;
             }
         }
-
         event.setHeader('content-type', 'text/html');
         return dom.innerHTML;
     }
-
-    private async getNavigationResponse(event: AnyRequestEvent): Promise<XvelteResponse> {
-        if (event.url.pathname !== "/__xvelte__/navigation") return false;
+    async getNavigationResponse(event) {
+        if (event.url.pathname !== "/__xvelte__/navigation")
+            return false;
         const to = event.url.searchParams.get('to');
-        if (!to) return false;
-
+        if (!to)
+            return false;
         const { handler, params } = this.getPageHandler(pathify(to));
-        if (!handler) return false;
-
+        if (!handler)
+            return false;
         event.params = params;
         const renderingData = await handler(event);
-        if (!renderingData) return false;
-
+        if (!renderingData)
+            return false;
         const renderedData = this.renderPage(renderingData);
         return JSON.stringify(renderedData);
     }
-
-    private registerRequestHandler<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>, method: string) {
+    registerRequestHandler(route, handler, method) {
         if (typeof (route) === "string") {
             const route_ = pathify(route);
-
             const pathRegexp = pathToRegexp.pathToRegexp(route_);
             if (pathRegexp.keys.length === 0) {
                 const formerHandler = this.requestHandlerMap.get(route_);
@@ -381,126 +328,99 @@ export class XvelteApp {
             const formerHandler = this.requestPatternHandlerMap.get(route);
             this.requestPatternHandlerMap.set(route, generateNewHandler(formerHandler));
         }
-
-        function generateNewHandler(formerHandler: AnyRequestHandler | undefined): RequestHandler<Route> {
+        function generateNewHandler(formerHandler) {
             if (method === "all") {
-                return async (event: AnyRequestEvent) => {
+                return async (event) => {
                     if (formerHandler) {
                         const r = await formerHandler(event);
-                        if (r !== false) return r;
+                        if (r !== false)
+                            return r;
                     }
-
                     return await handler(event);
-                }
+                };
             }
             else {
-                return async (event: AnyRequestEvent) => {
+                return async (event) => {
                     if (event.method === method) {
                         return await handler(event);
                     }
-
                     if (formerHandler) {
                         return await formerHandler(event);
                     }
-
                     return false;
-                }
+                };
             }
         }
     }
 }
-
-export namespace XvelteApp {
-    export const css = `xvelte-body, xvelte-island, xvelte-frag{display:contents;}`;
-}
-
 class ComponentIdMap {
-    private map = new Map<Component, string>();
-    private reverseMap = new Map<string, Component>();
-
-    register(component: Component) {
+    map = new Map();
+    reverseMap = new Map();
+    register(component) {
         if (this.map.has(component)) {
-            return this.map.get(component) as string;
+            return this.map.get(component);
         }
-
-        const id = hash('md5', component.toString(), 'hex');
-
+        let id;
+        do {
+            id = 'x' + Math.random().toString(16).replace('.', '');
+        } while (this.reverseMap.has(id));
         this.map.set(component, id);
         this.reverseMap.set(id, component);
         return id;
     }
-
-    getId(component: Component) {
+    getId(component) {
         return this.map.get(component);
     }
-
-    getComponent(id: string) {
+    getComponent(id) {
         return this.reverseMap.get(id);
     }
 }
-
-interface NotPrivateRequestEvent<Route extends string | RegExp> {
-    url: URL;
-    params: Route extends string ? RouteParams<Route> : Record<string, string>;
-    requestHeaders: Record<string, string>;
-    locals: Record<string, any>;
-    request: IncomingMessage;
-    requestCookie: Record<string, string | undefined>;
-    responseHeader: Record<string, string>;
-    responseStatus: number;
-    responseCookie: Record<string, string>;
-}
-export class RequestEvent<Route extends string | RegExp> {
-    url: URL;
+export class RequestEvent {
+    url;
     //@ts-expect-error
-    params: Route extends string ? RouteParams<Route> : Record<string, string>;
-    requestHeaders: Record<string, string>;
-    locals: Record<string, any> = {};
-    method: string;
-
-    private request;
-    private requestCookie;
-    private requestData: Promise<Buffer<ArrayBuffer>>;
-    private responseHeader: Record<string, string | number | string[]> = {};
-    private responseStatus: number = 200;
-    private responseCookie: Record<string, string> = {};
-
-    constructor(req: IncomingMessage) {
-        const baseUrl =
-            req.headers.origin ? req.headers.origin :
-                req.headers.host ? `http://${req.headers.host}` : 'http://localhost';
+    params;
+    requestHeaders;
+    locals = {};
+    method;
+    request;
+    requestCookie;
+    requestData;
+    responseHeader = {};
+    responseStatus = 200;
+    responseCookie = {};
+    constructor(req) {
+        const baseUrl = req.headers.origin ? req.headers.origin :
+            req.headers.host ? `http://${req.headers.host}` : 'http://localhost';
         const url = new URL(req.url ?? '', baseUrl);
-
         this.url = url;
         this.method = (req.method ?? 'get').toLowerCase();
         this.request = req;
-        this.requestHeaders = req.headers as unknown as Record<string, string>;
+        this.requestHeaders = req.headers;
         this.requestData = new Promise((resolve, reject) => {
-            const body: Uint8Array[] = [];
+            const body = [];
             this.request.on('data', (chunk) => {
                 body.push(chunk);
             });
             this.request.on('end', () => {
-                resolve(Buffer.concat(body))
-            })
+                resolve(Buffer.concat(body));
+            });
             this.request.on('error', reject);
-        })
+        });
         this.requestCookie = cookie.parse(this.requestHeaders.cookie ?? '');
     }
-
-    setHeader(key: string, value: string | number | string[]) {
+    setHeader(key, value) {
         this.responseHeader[key] = value;
     }
-    setStatus(status: number) {
+    setStatus(status) {
         this.responseStatus = status;
     }
     getStatus() {
         return this.responseStatus;
     }
-    getCookie(key: string) {
+    getCookie(key) {
         return this.requestCookie[key] ?? null;
     }
-    setCookie(key: string, value: string, option: cookie.SerializeOptions & { path: string }) {
+    setCookie(key, value, option) {
         this.responseCookie[key] = cookie.serialize(key, value, option);
     }
     getClientAddress() {
@@ -513,13 +433,13 @@ export class RequestEvent<Route extends string | RegExp> {
         return JSON.parse(await this.text());
     }
     async blob() {
-        return new Blob([await this.requestData])
+        return new Blob([await this.requestData]);
     }
     async buffer() {
         return await this.requestData;
     }
 }
-
-function pathify(path_: string) {
+function pathify(path_) {
     return new URL(path_, 'http://void').pathname;
 }
+//# sourceMappingURL=XvelteApp.js.map

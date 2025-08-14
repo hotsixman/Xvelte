@@ -1,12 +1,15 @@
+import { type Component } from "svelte";
 import type { FragData } from "../types";
 
-class XvelteFragManager {
+class FragManager {
     head: { start: Comment, end: Comment } | null = null;
     body: HTMLElement | null = null;
     fragsDatas: FragData[] = [];
 
     fragReady: Promise<void>
     private resolveFragReady: () => void;
+    
+    private componentInstanceMap = new Map<string, Record<string, any>[]>();
 
     constructor() {
         let resolve: () => void = () => void 0;
@@ -25,6 +28,7 @@ class XvelteFragManager {
 
         document.head.childNodes.forEach((node) => {
             if (!(node instanceof Comment)) return;
+            if (!node.textContent) return;
 
             if (node.textContent === "xvelte-head") {
                 headStart = node;
@@ -37,7 +41,7 @@ class XvelteFragManager {
                 currentStart = node;
             }
             else if (node.textContent.startsWith('/xvelte-headfrag') && (currentStart && currentId)) {
-                const body = document.querySelector(`xvelte-frag[data-component-id=${currentId}]`) as HTMLElement;
+                const body = document.querySelector(`xvelte-frag[data-frag-id=${currentId}]`) as HTMLElement;
                 this.fragsDatas.push({
                     id: currentId,
                     headStart: currentStart,
@@ -59,12 +63,26 @@ class XvelteFragManager {
 
         this.resolveFragReady();
     }
+
+    registerComponentInstance(fragId: string, instance: Record<string, any>){
+        let instanceArray = this.componentInstanceMap.get(fragId);
+        if(!instanceArray){
+            instanceArray = [];
+            this.componentInstanceMap.set(fragId, instanceArray);
+        }
+        instanceArray.push(instance);
+    }
+
+    async destroyComponentInstances(fragId: string){
+        const instanceArray = this.componentInstanceMap.get(fragId);
+        if(!instanceArray) return;
+        for(const instance of instanceArray){
+            console.log(await window.__xvelte__.unmount(instance));
+        }
+    }
 }
 
-const xvelteFragManager = new XvelteFragManager();
-window.addEventListener('DOMContentLoaded', () => xvelteFragManager.findFrags());
+const fragManager = new FragManager();
+window.addEventListener('DOMContentLoaded', () => fragManager.findFrags());
 
-async function goto(url: string | URL) {
-    await xvelteFragManager.fragReady;
-    const destination = new URL(url, location.href);
-}
+export { fragManager }

@@ -14,7 +14,8 @@
         "isolatedModules": true,
         "moduleDetection": "force",
         "verbatimModuleSyntax": true,
-        "outDir": "dist"
+        "outDir": "dist",
+        "experimentalDecorators": true
     },
     "include": [
         "index.ts",

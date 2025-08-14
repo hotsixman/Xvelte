@@ -7,7 +7,9 @@
   "exports": {
     ".": "./dist/index.js",
     "./components": "./dist/components.js",
-    "./client": "./dist/client.js"
+    "./client": "./dist/client.js",
+    "./vite": "./dist/vite.js",
+    "./tyoes": "./src/types.ts"
   },
   "dependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.1.1",
@@ -19,6 +21,7 @@
     "esbuild-svelte": "^0.9.3",
     "express": "^5.1.0",
     "jsesc": "^3.1.0",
+    "lit": "^3.3.1",
     "magic-string": "^0.30.17",
     "mime-types": "^3.0.1",
     "node-html-parser": "^7.0.1",

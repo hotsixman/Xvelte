@@ -1,4 +1,3 @@
-import xveltePlugin from './src/xveltePlugin';
-import { XvelteApp } from './src/XvelteApp';
-export { xveltePlugin, XvelteApp };
+import { XvelteApp } from "./src/server/XvelteApp";
+export default XvelteApp;
 //# sourceMappingURL=index.js.map

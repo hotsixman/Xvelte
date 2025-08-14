@@ -1,3 +1,9 @@
-import './navigation';
-import { mount } from 'svelte';
-window.__mount__ = mount;
+import './islandElement';
+import {fragManager} from './fragManager'
+import { mount, unmount } from 'svelte';
+
+window.__xvelte__ = {
+    fragManager,
+    mount,
+    unmount
+}

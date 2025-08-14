@@ -1,31 +1,26 @@
-import type { Plugin } from "vite";
 import path from 'node:path';
 import { compile, compileModule } from "svelte/compiler";
 import { createHash } from "node:crypto";
 import { build } from "esbuild";
 import fs from "node:fs";
 import { XvelteApp } from "./XvelteApp";
-
 /**
  * @todo 개발서버 일 때, client 컴포넌트들을 별도의 폴더에 번들링하여 저장해놓기
- * @returns 
+ * @returns
  */
-export default function xveltePlugin(): Plugin {
-    function generateHash(text: string) {
+export default function xveltePlugin() {
+    function generateHash(text) {
         return createHash('sha-256').update(text).digest('hex');
     }
-
-    const clientSvelteFilePaths = new Set<string>();
+    const clientSvelteFilePaths = new Set();
     let isDev = false;
     let devFileChanged = true;
-
     return {
         name: 'xvelte',
         enforce: 'pre',
         async config(config, { command }) {
             isDev = command === "serve";
             process.env.isDev = isDev;
-
             if (!isDev) {
                 return {
                     ...config,
@@ -52,7 +47,7 @@ export default function xveltePlugin(): Plugin {
                         },
                         outDir: 'build',
                     },
-                }
+                };
             }
         },
         async resolveId(id) {
@@ -60,14 +55,14 @@ export default function xveltePlugin(): Plugin {
                 return {
                     id,
                     external: true
-                }
+                };
             }
         },
         async load(id) {
             if (id.startsWith('/__xvelte__/client')) {
                 return {
                     code: ''
-                }
+                };
             }
         },
         async transform(code, id) {
@@ -76,13 +71,13 @@ export default function xveltePlugin(): Plugin {
             }
             else if (id.endsWith('.svelte?client')) {
                 clientSvelteFilePaths.add(id);
-                return `const path = "/__xvelte__/client/${generateHash(id)}.js"; export default path;`
+                return `const path = "/__xvelte__/client/${generateHash(id)}.js"; export default path;`;
             }
             if (id.endsWith('.svelte.js')) {
-                return compileModule(code, {}).js
+                return compileModule(code, {}).js;
             }
             if (id.endsWith('.svelte.ts')) {
-                return compileModule(code, {})
+                return compileModule(code, {});
             }
             else {
                 return null;
@@ -98,18 +93,18 @@ export default function xveltePlugin(): Plugin {
                         return next();
                     }
                     else {
-                        const app = await server.ssrLoadModule(path.resolve(process.cwd(), 'src/app')).then((module) => module.default as XvelteApp);
+                        const app = await server.ssrLoadModule(path.resolve(process.cwd(), 'src/app')).then((module) => module.default);
                         if (devFileChanged && clientSvelteFilePaths.size > 0) {
                             await buildClientComponents(path.resolve(process.cwd(), '.xvelte'));
                         }
-                        return await app.handle(req as any, res);
+                        return await app.handle(req, res);
                     }
                 }
                 catch (err) {
-                    server.ssrFixStacktrace(err as Error);
+                    server.ssrFixStacktrace(err);
                     next(err);
                 }
-            })
+            });
         },
         async handleHotUpdate({ file, server }) {
             if (path.matchesGlob(file, path.resolve(process.cwd(), 'src/**/*'))) {
@@ -121,26 +116,23 @@ export default function xveltePlugin(): Plugin {
                 return [];
             }
         }
-    }
-
-    async function buildClientComponents(dir: string) {
+    };
+    async function buildClientComponents(dir) {
         const { default: esbuildSvelte } = await import('esbuild-svelte');
         const xvelteClientScriptPath = path.resolve(import.meta.dirname, '..', 'client', 'xvelte.ts');
-
         if (!fs.existsSync(path.resolve(dir, 'client'))) {
             fs.mkdirSync(path.resolve(dir, 'client'), { recursive: true });
         }
         fs.writeFileSync(path.resolve(dir, 'client', '_svelte.js'), "import {mount} from 'svelte'; window.__mount__ = mount;", 'utf-8');
-
-        const entryPoints: Record<string, string> = {
+        const entryPoints = {
             [path.resolve(dir, 'client', 'svelte')]: xvelteClientScriptPath
         };
         clientSvelteFilePaths.forEach((original) => {
             entryPoints[path.resolve(dir, 'client', generateHash(original))] = original;
         });
         await build({
-            format: 'esm' as const,
-            platform: 'browser' as const,
+            format: 'esm',
+            platform: 'browser',
             bundle: true,
             splitting: true,
             entryPoints,
@@ -160,7 +152,7 @@ export default function xveltePlugin(): Plugin {
                                     return { path: path.resolve(process.cwd(), 'node_modules', 'svelte', 'src', 'index-client.js') };
                                 }
                             }
-                        })
+                        });
                     }
                 }
             ]
@@ -169,3 +161,4 @@ export default function xveltePlugin(): Plugin {
         clientSvelteFilePaths.clear();
     }
 }
+//# sourceMappingURL=xveltePlugin.js.map
