@@ -6,9 +6,6 @@
 
 <style>
     button{
-        width: 50px;
-        height: 30px;
-        font-size: 20px;
-        color: blue;
+        color: purple;
     }
 </style>

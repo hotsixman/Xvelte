@@ -349,15 +349,20 @@ export class XvelteApp {
 
     private async getNavigationResponse(event: AnyRequestEvent): Promise<XvelteResponse> {
         if (event.url.pathname !== "/__xvelte__/navigation") return false;
-        const to = event.url.searchParams.get('to');
-        if (!to) return false;
+        const to_ = event.url.searchParams.get('to');
+        if (!to_) return false;
+        const baseUrl =
+            event.requestHeaders.origin ? event.requestHeaders.origin :
+                event.requestHeaders.host ? `http://${event.requestHeaders.host}` : 'http://localhost';
+        const to = new URL(to_, baseUrl);
 
-        const { handler, params } = this.getPageHandler(pathify(to));
+        const { handler, params } = this.getPageHandler(to.pathname);
         if (!handler) return false;
 
+        event.url = to;
         event.params = params;
         const renderingData = await handler(event);
-        if (!renderingData) return false;
+        if (!renderingData) return null;
 
         const renderedData = this.renderPage(renderingData);
         return JSON.stringify(renderedData);

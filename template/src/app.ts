@@ -1,30 +1,32 @@
 import XvelteApp from "../../library/index"
 import template from './app.html?raw';
-import Index from './page/index/index.svelte';
-import Layout from "./page/index/Layout.svelte";
-import Test from "./page/test/test.svelte";
+import Layout from "./page/layout.svelte";
+import IndexPage from "./page/index/page.svelte";
+import AboutPage from "./page/about/page.svelte";
+import Layout2 from "./page/layout2.svelte";
 
 const app = new XvelteApp(template);
 
 app.page('/', () => ({
     layouts: [{
         component: Layout
+    },
+    {
+        component: Layout2
     }],
-    component: Index
+    component: IndexPage
 }));
-app.page('/test', async () => ({
-    component: Test,
-    props: {
-        time: 'asd'
-    }
-}));
-app.get('/get/:id', async(event) => {
-    event.setCookie('foo', 'bar', {path: '/'});
-    return 'response'
-})
+app.page('/about', () => ({
+    layouts: [
+        {
+            component: Layout
+        }
+    ],
+    component: AboutPage
+}))
 
 export default app;
 
-if(!process.env.isDev){
+if (!process.env.isDev) {
     app.listen();
 }

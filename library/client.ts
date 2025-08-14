@@ -1,0 +1,1 @@
+export { goto } from './src/client/navigation';

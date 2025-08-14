@@ -72,7 +72,8 @@ export default function xveltePlugin(): Plugin {
         },
         async transform(code, id) {
             if (id.endsWith('.svelte')) {
-                return compile(code, { generate: 'server', css: 'injected' }).js;
+                const compiled = compile(code, { generate: 'server', css: 'injected', name: generateHash(id) });
+                return compiled.js;
             }
             else if (id.endsWith('.svelte?client')) {
                 clientSvelteFilePaths.add(id);
