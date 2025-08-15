@@ -1,4 +1,4 @@
-import XvelteApp from "../../library/index"
+import XvelteApp from "@hotsixman/xvelte"
 import template from './app.html?raw';
 import Layout from "./page/layout.svelte";
 import IndexPage from "./page/index/page.svelte";
@@ -7,15 +7,18 @@ import Layout2 from "./page/layout2.svelte";
 
 const app = new XvelteApp(template);
 
-app.page('/', () => ({
-    layouts: [{
-        component: Layout
-    },
-    {
-        component: Layout2
-    }],
-    component: IndexPage
-}));
+app.page('/', () => {
+    console.log('/');
+    return {
+        layouts: [{
+            component: Layout
+        },
+        {
+            component: Layout2
+        }],
+        component: IndexPage
+    }
+});
 app.page('/about', () => ({
     layouts: [
         {

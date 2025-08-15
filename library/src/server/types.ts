@@ -1,6 +1,6 @@
 import type { Component } from "svelte";
 import type { IncomingMessage as IncomingMessage_ } from "node:http";
-import type { RequestEvent } from './XvelteApp';
+import type { RequestEvent } from './XvelteApp.js';
 import type { ReadStream } from "node:fs";
 
 export type RequestHandler<Route extends string | RegExp> = (event: RequestEvent<Route>) => MaybePromise<XvelteResponse | null>;

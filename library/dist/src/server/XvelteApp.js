@@ -6,6 +6,7 @@ import path from "node:path";
 import mime from 'mime-types';
 import pathToRegexp from "path-to-regexp";
 import cookie from 'cookie';
+import { hash } from "node:crypto";
 if (typeof (process.env.isDev) === "undefined") {
     process.env.isDev = false;
 }
@@ -219,24 +220,34 @@ export class XvelteApp {
     renderPage(data) {
         const context = new Map();
         const layouts = (data.layouts ?? []).map((l) => {
+            const id = this.componentIdMap.register(l.component);
             const rendered = render(l.component, {
                 props: l.props,
                 context
             });
+            const dom = parseHtml(rendered.body, { comment: true });
+            dom.querySelectorAll('xvelte-island').forEach((island) => {
+                island.setAttribute('data-frag-id', id);
+            });
             return {
-                id: this.componentIdMap.register(l.component),
+                id,
                 head: rendered.head,
-                body: rendered.body
+                body: dom.innerHTML
             };
         });
+        const id = this.componentIdMap.register(data.component);
         const rendered = render(data.component, {
             props: data.props,
             context
         });
+        const dom = parseHtml(rendered.body, { comment: true });
+        dom.querySelectorAll('xvelte-island').forEach((island) => {
+            island.setAttribute('data-frag-id', id);
+        });
         const page = {
             id: this.componentIdMap.register(data.component),
             head: rendered.head,
-            body: rendered.body
+            body: dom.innerHTML
         };
         return { layouts, page };
     }
@@ -256,6 +267,7 @@ export class XvelteApp {
             if (process.env.isDev) {
                 newXvelteHead.innerHTML += '<script type="module" src="/@vite/client"></script>';
             }
+            newXvelteHead.innerHTML += `<style>${XvelteApp.css}</style>`;
             newXvelteHead.innerHTML += '<script type="module" src="/__xvelte__/client/svelte.js"></script>';
             [...rendered.layouts, rendered.page].forEach((layout) => {
                 const frag = parseHtml(`<!--xvelte-headfrag-${layout.id}-->`, { comment: true });
@@ -269,26 +281,26 @@ export class XvelteApp {
         const xvelteBody = dom.querySelector('xvelte-body');
         if (xvelteBody) {
             if (rendered.layouts.length > 0) {
-                const topLayoutFrag = parseHtml(`<xvelte-frag data-component-id="${rendered.layouts[0].id}">${rendered.layouts[0].body}</xvelte-frag>`).children[0];
+                const topLayoutFrag = parseHtml(`<xvelte-frag data-frag-id="${rendered.layouts[0].id}">${rendered.layouts[0].body}</xvelte-frag>`).children[0];
                 let frag = topLayoutFrag;
                 for (let i = 1; i < rendered.layouts.length; i++) {
                     const layout = rendered.layouts[i];
                     const slot = frag.getElementsByTagName('xvelte-slot')[0];
                     if (slot) {
-                        frag = parseHtml(`<xvelte-frag data-component-id="${layout.id}">${layout.body}</xvelte-frag>`).children[0];
+                        frag = parseHtml(`<xvelte-frag data-frag-id="${layout.id}">${layout.body}</xvelte-frag>`).children[0];
                         slot.replaceWith(frag);
                     }
                 }
                 const slot = frag.getElementsByTagName('xvelte-slot')[0];
                 if (slot) {
-                    frag = parseHtml(`<xvelte-frag data-component-id="${rendered.page.id}">${rendered.page.body}</xvelte-frag>`).children[0];
+                    frag = parseHtml(`<xvelte-frag data-frag-id="${rendered.page.id}">${rendered.page.body}</xvelte-frag>`).children[0];
                     slot.replaceWith(frag);
                 }
                 ;
                 xvelteBody.innerHTML = topLayoutFrag.outerHTML;
             }
             else {
-                const frag = parseHtml(`<xvelte-frag data-component-id="${rendered.page.id}">${rendered.page.body}</xvelte-frag>`);
+                const frag = parseHtml(`<xvelte-frag data-frag-id="${rendered.page.id}">${rendered.page.body}</xvelte-frag>`);
                 xvelteBody.innerHTML = frag.innerHTML;
             }
         }
@@ -298,16 +310,20 @@ export class XvelteApp {
     async getNavigationResponse(event) {
         if (event.url.pathname !== "/__xvelte__/navigation")
             return false;
-        const to = event.url.searchParams.get('to');
-        if (!to)
+        const to_ = event.url.searchParams.get('to');
+        if (!to_)
             return false;
-        const { handler, params } = this.getPageHandler(pathify(to));
+        const baseUrl = event.requestHeaders.origin ? event.requestHeaders.origin :
+            event.requestHeaders.host ? `http://${event.requestHeaders.host}` : 'http://localhost';
+        const to = new URL(to_, baseUrl);
+        const { handler, params } = this.getPageHandler(to.pathname);
         if (!handler)
             return false;
+        event.url = to;
         event.params = params;
         const renderingData = await handler(event);
         if (!renderingData)
-            return false;
+            return null;
         const renderedData = this.renderPage(renderingData);
         return JSON.stringify(renderedData);
     }
@@ -353,6 +369,9 @@ export class XvelteApp {
         }
     }
 }
+(function (XvelteApp) {
+    XvelteApp.css = `xvelte-body, xvelte-island, xvelte-frag{display:contents;}`;
+})(XvelteApp || (XvelteApp = {}));
 class ComponentIdMap {
     map = new Map();
     reverseMap = new Map();
@@ -360,10 +379,7 @@ class ComponentIdMap {
         if (this.map.has(component)) {
             return this.map.get(component);
         }
-        let id;
-        do {
-            id = 'x' + Math.random().toString(16).replace('.', '');
-        } while (this.reverseMap.has(id));
+        const id = hash('md5', component.toString(), 'hex');
         this.map.set(component, id);
         this.reverseMap.set(id, component);
         return id;

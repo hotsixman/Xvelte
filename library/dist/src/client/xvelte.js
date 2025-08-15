@@ -1,8 +1,12 @@
-import './main.css';
-import { fragManager } from './xvelteFragManager';
-import { mount } from 'svelte';
+import './islandElement.js';
+import { fragManager } from './fragManager.js';
+import { mount, unmount } from 'svelte';
+import { addAnchorClickHandler, addPopstateHandler, goto } from './navigation.js';
+addAnchorClickHandler();
+addPopstateHandler();
 window.__xvelte__ = {
     fragManager,
-    mount
+    mount,
+    unmount
 };
 //# sourceMappingURL=xvelte.js.map

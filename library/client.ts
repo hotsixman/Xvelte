@@ -1,1 +1,1 @@
-export { goto } from './src/client/navigation';
+export { goto } from './src/client/navigation.js';

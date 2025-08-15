@@ -6,8 +6,8 @@ declare module '*.svelte?client' {
     export default content;
 }
 
-declare namespace NodeJS{
-    interface ProcessEnv{
+declare namespace NodeJS {
+    interface ProcessEnv {
         isDev: boolean;
     }
 }

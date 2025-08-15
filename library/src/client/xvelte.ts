@@ -1,14 +1,10 @@
-import './islandElement';
-import {fragManager} from './fragManager'
+import './islandElement.js';
+import {fragManager} from './fragManager.js'
 import { mount, unmount } from 'svelte';
-import { goto } from './navigation';
+import { addAnchorClickHandler, addPopstateHandler, goto } from './navigation.js';
 
-document.addEventListener('click', (event) => {
-    if(event.target && event.target instanceof HTMLAnchorElement && event.target.origin === location.origin && (!event.target.target || event.target.target === "_self")){
-        event.preventDefault();
-        goto(event.target.href);
-    }
-})
+addAnchorClickHandler();
+addPopstateHandler();
 
 window.__xvelte__ = {
     fragManager,

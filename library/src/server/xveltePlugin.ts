@@ -2,9 +2,9 @@ import type { Plugin } from "vite";
 import path from 'node:path';
 import { compile, compileModule } from "svelte/compiler";
 import { createHash } from "node:crypto";
-import { build } from "esbuild";
+import { build, type Plugin as EsbuildPlugin } from "esbuild";
 import fs from "node:fs";
-import { XvelteApp } from "./XvelteApp";
+import { XvelteApp } from "./XvelteApp.js";
 
 /**
  * @todo 개발서버 일 때, client 컴포넌트들을 별도의 폴더에 번들링하여 저장해놓기
@@ -125,8 +125,11 @@ export default function xveltePlugin(): Plugin {
     }
 
     async function buildClientComponents(dir: string) {
-        const { default: esbuildSvelte } = await import('esbuild-svelte');
-        const xvelteClientScriptPath = path.resolve(import.meta.dirname, '..', 'client', 'xvelte.ts');
+        const { default: esbuildSvelte } = await import('esbuild-svelte') as unknown as { default: (...args: any[]) => EsbuildPlugin };
+        let xvelteClientScriptPath = path.resolve(import.meta.dirname, '..', 'client', 'xvelte.ts');
+        if(!fs.existsSync(xvelteClientScriptPath)){
+            xvelteClientScriptPath = path.resolve(import.meta.dirname, '..', 'client', 'xvelte.js')
+        }
 
         if (!fs.existsSync(path.resolve(dir, 'client'))) {
             fs.mkdirSync(path.resolve(dir, 'client'), { recursive: true });

@@ -1,5 +1,5 @@
 import type { ComponentType, SvelteComponent, Component, MountOptions } from 'svelte'
-import type { FragManager } from './client/fragManager'
+import type { FragManager } from './client/fragManager.js'
 
 declare global {
     interface Window {

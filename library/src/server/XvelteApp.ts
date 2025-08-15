@@ -8,7 +8,7 @@ import path from "node:path";
 import mime from 'mime-types'
 import pathToRegexp from "path-to-regexp";
 import cookie from 'cookie';
-import type { PageHandler, IncomingMessage, PageHandleData, RequestHandler, AnyPageHandler, AnyRequestHandler, RouteParams, XvelteResponse, AnyRequestEvent } from "./types";
+import type { PageHandler, IncomingMessage, PageHandleData, RequestHandler, AnyPageHandler, AnyRequestHandler, RouteParams, XvelteResponse, AnyRequestEvent } from "./types.js";
 import { hash } from "node:crypto";
 
 if (typeof (process.env.isDev) === "undefined") {
