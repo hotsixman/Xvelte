@@ -2,16 +2,15 @@
   "name": "@hotsixman/xvelte",
   "repository": "https://github.com/hotsixman/xvelte",
   "author": "hotsixman",
-  "version": "0.2.6",
+  "version": "0.2.11",
   "main": "./dist/index.js",
   "exports": {
     ".": "./dist/index.js",
-    "./components/*": "./src/components/*",
     "./client": "./dist/client.js",
     "./vite": "./dist/vite.js",
     "./types": "./src/types.ts",
-    "./client.d.ts": "./client.d.ts",
-    "./server.d.ts": "./server.d.ts"
+    "./components/*": "./src/components/*",
+    "./dts/*": "./dts/*"
   },
   "dependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.1.1",

@@ -1,4 +1,4 @@
-import type { ServerResponse } from "node:http";
+import { type ServerResponse } from "node:http";
 import cookie from 'cookie';
 import type { PageHandler, IncomingMessage, RequestHandler, RouteParams } from "./types.js";
 export declare class XvelteApp {
@@ -16,7 +16,7 @@ export declare class XvelteApp {
     delete<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>): void;
     all<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>): void;
     handle(req: IncomingMessage, res: ServerResponse): Promise<ServerResponse<import("http").IncomingMessage> | undefined>;
-    listen(): void;
+    listen(port: number, callback?: (error?: Error) => any): void;
     private getHandler;
     private getPageHandler;
     private getRequestHandler;

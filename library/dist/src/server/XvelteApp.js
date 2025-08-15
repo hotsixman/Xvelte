@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { HTMLElement, parse as parseHtml } from 'node-html-parser';
 import { render } from "svelte/server";
 import express, {} from 'express';
@@ -51,33 +52,38 @@ export class XvelteApp {
         this.registerRequestHandler(route, handler, 'all');
     }
     async handle(req, res) {
-        const event = new RequestEvent(req);
-        if (await this.sendResponse(event, await this.getXvelteClientFileResponse(event), res))
-            return;
-        if (await this.sendResponse(event, await this.getNavigationResponse(event), res))
-            return;
-        const { handler, params, isPageHandler } = this.getHandler(event.url.pathname);
-        event.params = params;
-        if (handler) {
-            let response;
-            if (isPageHandler) {
-                response = await this.getPageResponse(event, handler);
-            }
-            else {
-                response = await handler(event);
-            }
-            if (await this.sendResponse(event, response, res))
+        try {
+            const event = new RequestEvent(req);
+            if (await this.sendResponse(event, await this.getXvelteClientFileResponse(event), res))
                 return;
+            if (await this.sendResponse(event, await this.getNavigationResponse(event), res))
+                return;
+            const { handler, params, isPageHandler } = this.getHandler(event.url.pathname);
+            event.params = params;
+            if (handler) {
+                let response;
+                if (isPageHandler) {
+                    response = await this.getPageResponse(event, handler);
+                }
+                else {
+                    response = await handler(event);
+                }
+                if (await this.sendResponse(event, response, res))
+                    return;
+            }
+            res.statusCode = 404;
+            return res.end('404 Error');
         }
-        res.statusCode = 404;
-        return res.end('404 Error');
+        catch (err) {
+            res.statusCode = 500;
+            return res.end();
+        }
     }
-    listen() {
-        const expressApp = express();
-        expressApp.use((req, res) => {
+    listen(port, callback) {
+        const app = createServer((req, res) => {
             this.handle(req, res);
         });
-        expressApp.listen(3000);
+        app.listen(port, callback);
     }
     getHandler(path) {
         let handler = null;
