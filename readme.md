@@ -1,12 +1,12 @@
 # Xvelte
 Xvelte는 [Svelte](https://github.com/sveltejs/svelte)를 사용한 SSR 프레임워크입니다. 부분 클라이언트 렌더링(Island)를 사용할 수 있으며, [Node.js http](https://nodejs.org/api/http.html), [Express](https://expressjs.com) 등과 쉽게 통합할 수 있습니다.
 
-[!Important]
-아직 개발중이기 때문에 버그 및 난해한 코드가 있을 수 있습니다.
+> [!IMPORTANT]
+> 아직 개발중이기 때문에 버그 및 난해한 코드가 있을 수 있습니다.
 
 ## 설치
-[!NOTE]
-`template` 폴더를 참고하십시오.
+> [!NOTE]
+> `template` 폴더를 참고하십시오.
 
 ### 1. 라이브러리 설치
 아래 코드를 터미널에 입력하여 라이브러리를 설치합니다.
