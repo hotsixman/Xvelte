@@ -1,20 +1,20 @@
 # Xvelte
-Xvelte는 [Svelte](https://github.com/sveltejs/svelte)를 사용한 SSR 프레임워크입니다. 부분 클라이언트 렌더링(Island)를 사용할 수 있으며, [Node.js http](https://nodejs.org/api/http.html), [Express](https://expressjs.com) 등과 쉽게 통합할 수 있습니다.
+Xvelte is an SSR framework that uses [Svelte](https://github.com/sveltejs/svelte). It allows for partial client rendering (Islands) and can be easily integrated with [Node.js http](https://nodejs.org/api/http.html), [Express](https://expressjs.com), and more.
 
 > [!IMPORTANT]
-> 아직 개발중이기 때문에 버그 및 난해한 코드가 있을 수 있습니다.
+> It is still under development, so there may be bugs and convoluted code.
 
-## 설치
+## Installation
 > [!NOTE]
-> `template` 폴더를 참고하십시오.
+> Please refer to the `template` folder.
 
-### 1. 라이브러리 설치
-아래 코드를 터미널에 입력하여 라이브러리를 설치합니다.
+### 1. Install the library
+Enter the following code into your terminal to install the library.
 `npm i @hotsixman/xvelte`
 
-### 2. 프로젝트 설정
-1. `src/app.ts` 또는 `src/app.js`를 생성합니다. 이것은 프로젝트의 메인 파일입니다.
-2. `vite.config.ts`를 생성하고 다음과 같이 작성합니다.
+### 2. Project Setup
+1.  Create `src/app.ts` or `src/app.js`. This is the main file for your project.
+2.  Create `vite.config.ts` and write it as follows:
     ```ts
     import { defineConfig, Plugin } from "vite";
     import xveltePlugin from "@hotsixman/xvelte/vite"
@@ -23,12 +23,12 @@ Xvelte는 [Svelte](https://github.com/sveltejs/svelte)를 사용한 SSR 프레�
         plugins: [xveltePlugin() as Plugin]
     })
     ```
-3. `src/env.d.ts`를 생성하고 다음과 같이 작성합니다.
+3.  Create `src/env.d.ts` and write it as follows:
     ```ts
     /// <reference types="@hotsixman/xvelte/dts/client.d.ts" />
     /// <reference types="@hotsixman/xvelte/dts/server.d.ts" />
     ```
-4. `tsconfig.json`를 생성하고 다음과 같이 작성합니다.
+4.  Create `tsconfig.json` and write it as follows:
     ```json
     {
         "compilerOptions": {
@@ -56,8 +56,8 @@ Xvelte는 [Svelte](https://github.com/sveltejs/svelte)를 사용한 SSR 프레�
     }
     ```
 
-### 3. `src/app.js`/`src/app.ts` 설정
-`src/app.js` 또는 `src/app.ts`(이하 app 파일)에서는 `XvelteApp` 인스턴스를 `default`로 내보내야합니다. 따라서 아래와 같이 작성합니다.
+### 3. Configuring `src/app.js`/`src/app.ts`
+In `src/app.js` or `src/app.ts` (hereafter, the app file), you must export a `XvelteApp` instance as the `default`. Therefore, write it as follows:
 ```ts
 import XvelteApp from "@hotsixman/xvelte"
 
@@ -66,22 +66,22 @@ const app = new XvelteApp(template);
 export default app;
 ```
 
-이때 `template` 변수는 앱에서 사용할 기본적인 html 템플릿입니다. `import template from './app.html?raw'`와 같이 불러와도 되고, `fs.readFile` 등을 사용하여 불러와도 됩니다.
+Here, the `template` variable is the basic HTML template your app will use. You can import it with something like `import template from './app.html?raw'`, or load it using `fs.readFile`, etc.
 
-만약 프로덕션에서 app 파일을 실행하여 서버를 실행할 예정이라면, 다음 코드를 app 파일 아래에 추가하세요.
+If you plan to run the server by executing the app file in production, add the following code to the bottom of the app file:
 ```ts
 if(!process.env.isDev){
-    app.listen(3000, () => {console.log(`server is listening on port 3000`)}); // port는 변경할 수 있습니다.
+    app.listen(3000, () => {console.log(`server is listening on port 3000`)}); // The port can be changed.
 }
 ```
 
-### 4. 라우팅
-XvelteApp은 핸들러 함수를 등록하여 요청을 처리할 수 있습니다.
+### 4. Routing
+XvelteApp can handle requests by registering handler functions.
 ```ts
 ...
-// 페이지 추가
+// Add a page
 app.page('/', (event) => {
-    // 여기에 서버 로직을 작성합니다.
+    // Write your server logic here.
     console.log("Request received at '/'");
 
     const currentTimeString = new Date().toLocaleTimeString();
@@ -89,24 +89,24 @@ app.page('/', (event) => {
     return {
         layouts: [
             {
-                component: Layout // Svelte 컴포넌트
+                component: Layout // Svelte component
             }
         ],
-        component: Page, // Svelte 컴포넌트
+        component: Page, // Svelte component
         props:{
             currentTimeString
-        } // 해당 컴포넌트에 사용할 props
+        } // Props to be used by this component
     }
 });
 
-// 엔드포인트 추가
-// Express와 비슷한 방식으로 동적라우팅을 사용할 수 있습니다.
-// get 뿐 아니라 post, put, delete도 사용 가능하며, all을 사용하면 모든 요청 메소드에 핸들러 함수를 사용할 수 있습니다.
+// Add an endpoint
+// You can use dynamic routing in a way similar to Express.
+// Not only get, but also post, put, and delete are available. Using 'all' allows the handler function to be used for all request methods.
 app.get('/test/:param', (event) => { 
     console.log(`Request received at '${event.url.pathname}'`);
 
     const name = event.getCookie('name');
-    event.getCookie('age', '20');
+    event.setCookie('age', '20');
 
     event.setHeader('content-type', 'text/plain; charset=utf-8');
 
@@ -114,23 +114,23 @@ app.get('/test/:param', (event) => {
 })
 ```
 
-레이아웃을 사용할 경우, 페이지를 이동할 때 공통된 레이아웃은 재생성되지 않고 그대로 사용됩니다.
+When using layouts, common layouts are not recreated and are reused when navigating between pages.
 
-## 레이아웃
-SvelteKit에서는 레이아웃 컴포넌트에 `<slot/>` 또는 `{@render children?.()}`을 사용하여 하위 레이아웃 또는 페이지 컴포넌트가 들어올 자리를 나타내지만, Xvelte에서는 `<Slot/>` 컴포넌트 또는 `<xvelte-slot></xvelte-slot>` 태그를 사용하여 나타냅니다. `Slot` 컴포넌트는 `@hotsixman/xvelte/components/Slot.svelte`에서 import 할 수 있습니다. 
+## Layouts
+In SvelteKit, you use `<slot/>` or `{@render children?.()}` in a layout component to indicate where a child layout or page component should be placed. In Xvelte, you use the `<Slot/>` component or the `<xvelte-slot></xvelte-slot>` tag for this purpose. The `Slot` component can be imported from `@hotsixman/xvelte/components/Slot.svelte`.
 
-## 부분 클라이언트 렌더링
-Xvelte에서는 쉽게 부분 클라이언트 렌더링을 사용할 수 있습니다.
+## Partial Client Rendering
+In Xvelte, you can easily use partial client rendering.
 ```svelte
 <script>
     import Island from '@hotsixman/xvelte/components/Island.svelte';
-    // 클라이언트 렌더링을 사용하려면 import 경로 뒤에 `?client`를 붙이면 됩니다.
+    // To use client rendering, just append `?client` to the import path.
     import Counter from './Counter.svelte?client';
 </script>
 
 <Island component={Counter}/>
-<!--또는-->
+<!--or-->
 <xvelte-island component={Counter}></xvelte-island>
 ```
 
-컴포넌트를 import 할 때 `?client`를 뒤에 붙이면, 컴포넌트가 아닌 클라언트에서 해당 컴포넌트를 불러올 수 있는 경로로 바뀝니다. 즉, 위 코드에서 `Counter`는 문자열입니다. 브라우저에서 이 경로로 요청을 보내면 컴포넌트를 import 할 수 있습니다. 이를 `Island` 컴포넌트 또는 `xvelte-island` 요소에 속성값으로 넣으면, 브라우저에서 해당 컴포넌트를 import 한 뒤 렌더링합니다.
+When you append `?client` while importing a component, it changes the import from the component itself to a path that allows the client to load that component. In other words, in the code above, `Counter` is a string. When the browser sends a request to this path, it can import the component. By passing this as a property to the `Island` component or the `xvelte-island` element, the browser will import and then render the component.
