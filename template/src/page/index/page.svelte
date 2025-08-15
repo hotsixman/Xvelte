@@ -1,5 +1,4 @@
 <script>
-    import { log } from "console";
     import Island from "@hotsixman/xvelte/components/Island.svelte";
     import Counter from "./counter.svelte?client";
 </script>

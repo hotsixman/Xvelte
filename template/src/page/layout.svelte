@@ -1,6 +1,6 @@
 <script>
-    import Island from "@hotsixman/xvelte/components/Island.svelte";
-    import Slot from "@hotsixman/xvelte/components/Slot.svelte";
+    import Island from '@hotsixman/xvelte/components/Island.svelte';
+    import Slot from '@hotsixman/xvelte/components/Slot.svelte';
     import Input from "./Input.svelte?client";
 </script>
 

@@ -28,6 +28,10 @@ app.page('/about', () => ({
     component: AboutPage
 }))
 
+app.get('/test/:param', (event) => {
+    
+})
+
 export default app;
 
 if (!process.env.isDev) {
