@@ -28,6 +28,33 @@ Xvelte는 [Svelte](https://github.com/sveltejs/svelte)를 사용한 SSR 프레�
     /// <reference types="@hotsixman/xvelte/dts/client.d.ts" />
     /// <reference types="@hotsixman/xvelte/dts/server.d.ts" />
     ```
+4. `tsconfig.json`를 생성하고 다음과 같이 작성합니다.
+    ```json
+    {
+        "compilerOptions": {
+            "allowJs": true,
+            "checkJs": false,
+            "esModuleInterop": true,
+            "forceConsistentCasingInFileNames": true,
+            "resolveJsonModule": true,
+            "skipLibCheck": true,
+            "sourceMap": true,
+            "strict": true,
+            "moduleResolution": "bundler",
+            "module": "esnext",
+            "target": "esnext",
+            "isolatedModules": true,
+            "moduleDetection": "force",
+            "verbatimModuleSyntax": true
+        },
+        "include": [
+            "src/**/*.js",
+            "src/**/*.ts",
+            "src/**/*.d.ts",
+            "src/**/*.svelte"
+        ]
+    }
+    ```
 
 ### 3. `src/app.js`/`src/app.ts` 설정
 `src/app.js` 또는 `src/app.ts`(이하 app 파일)에서는 `XvelteApp` 인스턴스를 `default`로 내보내야합니다. 따라서 아래와 같이 작성합니다.
