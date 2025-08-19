@@ -1,19 +1,19 @@
 <script>
-    import Island from "@hotsixman/xvelte/components/Island.svelte";
+    import Island from "../../../../library/src/components/Island.svelte";
     import Counter from "./counter.svelte?client";
 </script>
-<div>
-    메인페이지
-</div>
-<Island component={Counter}/>
+
+<div>메인페이지</div>
+
 <svelte:head>
     <script>
-        console.log('<');
+        console.log("<");
     </script>
 </svelte:head>
+<Island component={Counter} props={{init: 5}}/>
 
 <style>
-    div{
+    div {
         color: red;
     }
 </style>

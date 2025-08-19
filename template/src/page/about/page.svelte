@@ -1,5 +1,5 @@
 <script>
-    import Island from "@hotsixman/xvelte/components/Island.svelte";
+    import Island from "../../../../library/src/components/Island.svelte";
 
 </script>
 <div>

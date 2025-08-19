@@ -3,7 +3,7 @@ import path from 'node:path';
 import { compile, compileModule } from "svelte/compiler";
 import { createHash } from "node:crypto";
 import { build, type Plugin as EsbuildPlugin } from "esbuild";
-import fs from "node:fs";
+import fs, { read } from "node:fs";
 import { XvelteApp } from "./XvelteApp.js";
 
 /**
@@ -55,6 +55,11 @@ export default function xveltePlugin(): Plugin {
                 }
             }
         },
+        watchChange(id, change) {
+            if (clientSvelteFilePaths.has(id) && change.event === 'delete') {
+                clientSvelteFilePaths.delete(id);
+            }
+        },
         async resolveId(id) {
             if (id.startsWith('/__xvelte__/client')) {
                 return {
@@ -76,8 +81,9 @@ export default function xveltePlugin(): Plugin {
                 return compiled.js;
             }
             else if (id.endsWith('.svelte?client')) {
-                clientSvelteFilePaths.add(id);
-                return `const path = "/__xvelte__/client/${generateHash(id)}.js"; export default path;`
+                const realId = id.replace(/\?client$/, '');
+                clientSvelteFilePaths.add(realId);
+                return `const path = "/__xvelte__/client/${generateHash(realId)}.js"; export default path;`
             }
             if (id.endsWith('.svelte.js')) {
                 return compileModule(code, {}).js
@@ -127,17 +133,17 @@ export default function xveltePlugin(): Plugin {
     async function buildClientComponents(dir: string) {
         const { default: esbuildSvelte } = await import('esbuild-svelte') as unknown as { default: (...args: any[]) => EsbuildPlugin };
         let xvelteClientScriptPath = path.resolve(import.meta.dirname, '..', 'client', 'xvelte.ts');
-        if(!fs.existsSync(xvelteClientScriptPath)){
+        if (!fs.existsSync(xvelteClientScriptPath)) {
             xvelteClientScriptPath = path.resolve(import.meta.dirname, '..', 'client', 'xvelte.js')
         }
-
+        /*
         if (!fs.existsSync(path.resolve(dir, 'client'))) {
             fs.mkdirSync(path.resolve(dir, 'client'), { recursive: true });
         }
         fs.writeFileSync(path.resolve(dir, 'client', '_svelte.js'), "import {mount} from 'svelte'; window.__mount__ = mount;", 'utf-8');
-
+        */
         const entryPoints: Record<string, string> = {
-            [path.resolve(dir, 'client', 'svelte')]: xvelteClientScriptPath
+            [path.resolve(dir, 'client', 'xvelte')]: xvelteClientScriptPath
         };
         clientSvelteFilePaths.forEach((original) => {
             entryPoints[path.resolve(dir, 'client', generateHash(original))] = original;
@@ -170,6 +176,5 @@ export default function xveltePlugin(): Plugin {
             ]
         });
         devFileChanged = false;
-        clientSvelteFilePaths.clear();
     }
 }

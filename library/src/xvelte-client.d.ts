@@ -6,7 +6,8 @@ declare global {
         __xvelte__: {
             mount: <Props extends Record<string, any>, Exports extends Record<string, any>>(component: ComponentType<SvelteComponent<Props>> | Component<Props, Exports, any>, options: MountOptions<Props>) => Exports,
             unmount: (component: Record<string, any>, options?: {outro?: boolean;}) => Promise<void>,
-            fragManager: FragManager
+            fragManager: FragManager,
+            context: Map<string, any>
         }
     }
 }

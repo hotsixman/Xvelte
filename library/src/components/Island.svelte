@@ -1,11 +1,13 @@
 <script lang="ts">
-    import type { Component } from "svelte";;
+    import type { Component } from "svelte";
+    import * as devalue from 'devalue';
 
     interface Props{
         component: Component
+        props?: Record<string, any>
     }
 
-    let {component}: Props = $props();
+    let {component, props}: Props = $props();
 </script>
 
-<xvelte-island {component}></xvelte-island>
+<xvelte-island {component} props={devalue.stringify(props)}></xvelte-island>

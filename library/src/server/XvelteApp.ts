@@ -88,6 +88,7 @@ export class XvelteApp {
             return res.end('404 Error');
         }
         catch(err){
+            console.error(err);
             res.statusCode = 500;
             return res.end();
         }
@@ -308,7 +309,7 @@ export class XvelteApp {
                 newXvelteHead.innerHTML += '<script type="module" src="/@vite/client"></script>';
             }
             newXvelteHead.innerHTML += `<style>${XvelteApp.css}</style>`;
-            newXvelteHead.innerHTML += '<script type="module" src="/__xvelte__/client/svelte.js"></script>';
+            newXvelteHead.innerHTML += '<script type="module" src="/__xvelte__/client/xvelte.js"></script>';
             [...rendered.layouts, rendered.page].forEach((layout) => {
                 const frag = parseHtml(`<!--xvelte-headfrag-${layout.id}-->`, { comment: true });
                 frag.innerHTML += layout.head;

@@ -9,5 +9,6 @@ addPopstateHandler();
 window.__xvelte__ = {
     fragManager,
     mount,
-    unmount
+    unmount,
+    context: new Map()
 }

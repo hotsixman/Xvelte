@@ -1,2 +1,2 @@
-/// <reference types="@hotsixman/xvelte/dts/client.d.ts" />
-/// <reference types="@hotsixman/xvelte/dts/server.d.ts" />
+/// <reference types="../../library/dts/client.d.ts" />
+/// <reference types="../../library/dts/server.d.ts" />
