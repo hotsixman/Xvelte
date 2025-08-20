@@ -2,7 +2,6 @@ import { createServer, type ServerResponse } from "node:http";
 import { HTMLElement, parse as parseHtml } from 'node-html-parser'
 import { render } from "svelte/server";
 import type { Component } from "svelte";
-import express, { type Handler } from 'express';
 import fs, { ReadStream } from 'node:fs';
 import path from "node:path";
 import mime from 'mime-types'
@@ -65,12 +64,12 @@ export class XvelteApp {
 
     async handle(req: IncomingMessage, res: ServerResponse) {
         try {
-            const event = new RequestEvent(req);
+            const event = new RequestEvent(req, res);
             if (await this.sendResponse(event, await this.getXvelteClientFileResponse(event), res)) return;
             if (await this.sendResponse(event, await this.getNavigationResponse(event), res)) return;
 
             const { handler, params, isPageHandler } = this.getHandler(event.url.pathname);
-            event.params = params;
+            RequestEvent.setParams(event, params);
 
             if (handler) {
                 let response: XvelteResponse;
@@ -201,7 +200,6 @@ export class XvelteApp {
             return true;
         }
         if (response === null) {
-            res.end();
             return true;
         }
         if (response instanceof ReadStream) {
@@ -353,6 +351,11 @@ export class XvelteApp {
         return dom.innerHTML;
     }
 
+    /**
+     * `/__xvelte__/navigation`으로 요청을 받았을 때 렌더링 데이터 반환
+     * @param event 
+     * @returns 
+     */
     private async getNavigationResponse(event: AnyRequestEvent): Promise<XvelteResponse> {
         if (event.url.pathname !== "/__xvelte__/navigation") return false;
         const to_ = event.url.searchParams.get('to');
@@ -366,7 +369,7 @@ export class XvelteApp {
         if (!handler) return false;
 
         event.url = to;
-        event.params = params;
+        RequestEvent.setParams(event, params);
         const renderingData = await handler(event);
         if (!renderingData) return null;
 
@@ -469,14 +472,15 @@ export class RequestEvent<Route extends string | RegExp> {
     locals: Record<string, any> = {};
     method: string;
 
-    private request;
+    request;
+    response;
     private requestCookie;
     private requestData: Promise<Buffer<ArrayBuffer>>;
     private responseHeader: Record<string, string | number | string[]> = {};
     private responseStatus: number = 200;
     private responseCookie: Record<string, string> = {};
 
-    constructor(req: IncomingMessage) {
+    constructor(req: IncomingMessage, res: ServerResponse) {
         const baseUrl =
             req.headers.origin ? req.headers.origin :
                 req.headers.host ? `http://${req.headers.host}` : 'http://localhost';
@@ -485,6 +489,7 @@ export class RequestEvent<Route extends string | RegExp> {
         this.url = url;
         this.method = (req.method ?? 'get').toLowerCase();
         this.request = req;
+        this.response = res;
         this.requestHeaders = req.headers as unknown as Record<string, string>;
         this.requestData = new Promise((resolve, reject) => {
             const body: Uint8Array[] = [];
@@ -528,6 +533,11 @@ export class RequestEvent<Route extends string | RegExp> {
     }
     async buffer() {
         return await this.requestData;
+    }
+}
+export namespace RequestEvent{
+    export function setParams(event: AnyRequestEvent, params: Record<string, string>){
+        event.params = params
     }
 }
 
