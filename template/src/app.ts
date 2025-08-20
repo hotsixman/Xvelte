@@ -7,7 +7,6 @@ import AboutPage from "./page/about/page.svelte";
 const app = new XvelteApp(template);
 
 app.page('/', () => {
-    console.log('/');
     return {
         layouts: [{
             component: Layout
@@ -23,6 +22,11 @@ app.page('/about', () => ({
     ],
     component: AboutPage
 }))
+
+app.get('/test', (event) => {
+    event.response.end('fuck you');
+    return null;
+})
 
 export default app;
 
