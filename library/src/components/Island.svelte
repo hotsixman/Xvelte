@@ -1,13 +1,17 @@
 <script lang="ts">
-    import type { Component } from "svelte";
-    import * as devalue from 'devalue';
+    import type { Component, Snippet } from "svelte";
+    import * as devalue from "devalue";
 
-    interface Props{
-        component: Component
-        props?: Record<string, any>
+    interface Props {
+        component: Component;
+        props?: Record<string, any>;
+        on?: "visible" | "click" | "mouseenter";
+        children?: Snippet;
     }
 
-    let {component, props}: Props = $props();
+    let { component, props, children, on }: Props = $props();
 </script>
 
-<xvelte-island {component} props={devalue.stringify(props)}></xvelte-island>
+<xvelte-island {component} props={devalue.stringify(props)} ev={on}>
+    {@render children?.()}
+</xvelte-island>

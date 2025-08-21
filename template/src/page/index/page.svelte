@@ -10,7 +10,9 @@
         console.log("<");
     </script>
 </svelte:head>
-<Island component={Counter} props={{init: 5}}/>
+<Island component={Counter} props={{init: 5}} on="click">
+    <button>서버</button>
+</Island>
 
 <style>
     div {
