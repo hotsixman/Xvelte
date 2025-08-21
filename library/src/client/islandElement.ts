@@ -24,7 +24,7 @@ class IslandElement extends LitElement {
         const Component = import(this.component).then(module => module.default as Component);
         switch (this.on) {
             case 'visible': {
-                if (!this.children[0]) break;
+                const intersectionTarget = this.children[0] ?? createTempChild(this);
                 this.observer = new IntersectionObserver(async (entries) => {
                     for (const entry of entries) {
                         if (entry.isIntersecting) {
@@ -35,8 +35,17 @@ class IslandElement extends LitElement {
                         }
                     }
                 });
-                this.observer.observe(this.children[0]);
+                this.observer.observe(intersectionTarget);
                 break;
+
+                function createTempChild(parent: Element) {
+                    const tempChild = document.createElement('div');
+                    tempChild.style.width = "0px";
+                    tempChild.style.height = "0px";
+                    tempChild.style.visibility = "hidden";
+                    parent.appendChild(tempChild);
+                    return tempChild;
+                }
             }
             case 'click': {
                 let clicked = false;
