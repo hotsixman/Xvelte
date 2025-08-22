@@ -112,7 +112,7 @@ export class FragManager {
     /**
      * `RenderingDataElement` 요소들을 fragment로 변환할 수 있는 형식으로 변환
      */
-    createFrag(renderingDataElements: { id: string, head: string, body: string }[]) {
+    createFrag(renderingDataElements: { id: string, head: string, body: string }[]): { headFrags: DocumentFragment[], bodyFrag: HTMLElement | null, fragDatas: (FragData & { scripts: HTMLScriptElement[]; })[] } {
         const headFrags: DocumentFragment[] = [];
         let bodyFrag: HTMLElement | null = null;
         const fragDatas: (FragData & { scripts: HTMLScriptElement[] })[] = [];

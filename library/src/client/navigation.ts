@@ -1,55 +1,134 @@
-import type { RenderingData } from "../types.js";
+import type { FragData, RenderingData, RenderingDataElement } from "../types.js";
+import type { FragManager } from "./fragManager.js";
 
-export async function goto(to: string | URL, option?: { type?: 'push' | 'replace' | 'none' }) {
+export async function goto(to: string | URL, option?: { type?: 'push' | 'replace', state?: Record<string, any> }) {
     const fragManager = window.__xvelte__.fragManager;
     await fragManager.fragReady;
-    if (typeof (to) === "string") {
-        to = new URL(to, location.href);
-    }
 
-    const renderingDataRequestUrl = new URL('/__xvelte__/navigation', location.href);
-    renderingDataRequestUrl.searchParams.set('to', to.pathname);
+    const renderingDataRequestUrl = getRenderingDataRequestUrl(to);
     const renderingData: RenderingData = await fetch(renderingDataRequestUrl).then((res) => res.json());
 
-    const d = [...renderingData.layouts, renderingData.page];
+    const renderingDataElements = [...renderingData.layouts, renderingData.page];
+    const diffrentFrom = findDifferentIndex(renderingDataElements, fragManager);
+    const replacedFrag = getReplacedFragment(fragManager, diffrentFrom);
+
+    switch (option?.type) {
+        case 'replace': {
+            history.replaceState({
+                renderingData,
+                pageState: option?.state ?? {}
+            }, "", to);
+            break;
+        }
+        case undefined:
+        case 'push': {
+            history.pushState({
+                renderingData,
+                pageState: option?.state ?? {}
+            }, "", to);
+            break;
+        }
+    }
+
+    await destroyFragments(fragManager, diffrentFrom);
+
+    const { headFrags, bodyFrag, fragDatas } = fragManager.createFrag(renderingDataElements.slice(diffrentFrom));
+    insertHeadFrag(headFrags, fragManager);
+    insertBodyFrag(bodyFrag, replacedFrag);
+
+    activeScripts(fragDatas, fragManager);
+}
+
+export function addAnchorClickHandler() {
+    document.addEventListener('click', (event) => {
+        if (event.target && event.target instanceof HTMLAnchorElement && event.target.origin === location.origin && (!event.target.target || event.target.target === "_self")) {
+            event.preventDefault();
+            goto(event.target.href);
+        }
+    })
+}
+
+export function addPopstateHandler() {
+    window.addEventListener('popstate', async (event) => {
+        event.preventDefault();
+        let renderingData = event.state?.renderingData;
+        if (!renderingData) {
+            renderingData = await fetch(getRenderingDataRequestUrl(location.href)).then((res) => res.json());
+            history.replaceState({
+                renderingData,
+                pageState: event.state?.pageState ?? {}
+            }, "");
+        }
+        const fragManager = window.__xvelte__.fragManager;
+        await fragManager.fragReady;
+        const renderingDataElements = [...renderingData.layouts, renderingData.page];
+        const diffrentFrom = findDifferentIndex(renderingDataElements, fragManager);
+        const replacedFrag = getReplacedFragment(fragManager, diffrentFrom);
+        await destroyFragments(fragManager, diffrentFrom);
+        const { headFrags, bodyFrag, fragDatas } = fragManager.createFrag(renderingDataElements.slice(diffrentFrom));
+        insertHeadFrag(headFrags, fragManager);
+        insertBodyFrag(bodyFrag, replacedFrag);
+        activeScripts(fragDatas, fragManager);
+    })
+}
+
+/**
+ * RenderingDataElement 들과 FragManger의 fragment들을 비교하여 차이가 나기 시작하는 index를 반환
+ * @param elements 
+ * @param fragManager 
+ * @returns 
+ */
+function findDifferentIndex(elements: RenderingDataElement[], fragManager: FragManager) {
     let diffrentFrom = 0;
-    for (let i = 0; i < Math.max(d.length, fragManager.fragIds.length); i++) {
-        if (d[i]?.id === fragManager.fragIds?.[i]) {
+    for (let i = 0; i < Math.max(elements.length, fragManager.fragIds.length); i++) {
+        if (elements[i]?.id === fragManager.fragIds?.[i]) {
             diffrentFrom = i + 1;
         }
         else {
             break;
         }
-    }
+    };
+    return diffrentFrom
+}
 
+/**
+ * 대체할 Fragment를 반환
+ */
+function getReplacedFragment(fragManager: FragManager, diffrentFrom: number) {
     let replacedFrag = fragManager.fragsDataMap.get(fragManager.fragIds[diffrentFrom])?.body ?? null;
     if (replacedFrag) {
         let marker = document.createElement('template');
         replacedFrag.replaceWith(marker);
         replacedFrag = marker;
-    }
+    };
+    return replacedFrag;
+}
 
-    switch(option?.type){
-        case 'replace':{
-            history.replaceState({}, "", to);
-            break;
-        }
-        case undefined:
-        case 'push': {
-            history.pushState({}, "", to);
-            break;
-        }
-    }
-
+/**
+ * 하위 fragment부터 제거
+ * @param fragManager 
+ * @param diffrentFrom 
+ */
+async function destroyFragments(fragManager: FragManager, diffrentFrom: number) {
     for (let i = fragManager.fragIds.length - 1; i >= diffrentFrom; i--) {
         await fragManager.destroyFrag(fragManager.fragIds[i]);
         fragManager.fragIds.pop();
     }
+}
 
-    const { headFrags, bodyFrag, fragDatas } = fragManager.createFrag(d.slice(diffrentFrom));
+/**
+ * Head fragment 삽입 
+ */
+function insertHeadFrag(headFrags: DocumentFragment[], fragManager: FragManager) {
     headFrags.forEach((hf) => {
         document.head.insertBefore(hf, fragManager.head?.end ?? null);
     });
+}
+
+/**
+ * Body fragment 삽입
+ */
+function insertBodyFrag(bodyFrag: HTMLElement | null, replacedFrag: HTMLElement | null) {
     if (bodyFrag) {
         if (replacedFrag) {
             replacedFrag.replaceWith(bodyFrag);
@@ -59,7 +138,9 @@ export async function goto(to: string | URL, option?: { type?: 'push' | 'replace
             document.querySelector('xvelte-body')?.appendChild(bodyFrag);
         }
     };
+}
 
+function activeScripts(fragDatas: (FragData & { scripts: HTMLScriptElement[]; })[], fragManager: FragManager) {
     fragDatas.forEach((d) => {
         d.scripts.forEach((script) => {
             const newScript = document.createElement('script');
@@ -75,18 +156,12 @@ export async function goto(to: string | URL, option?: { type?: 'push' | 'replace
     });
 }
 
-export function addAnchorClickHandler() {
-    document.addEventListener('click', (event) => {
-        if (event.target && event.target instanceof HTMLAnchorElement && event.target.origin === location.origin && (!event.target.target || event.target.target === "_self")) {
-            event.preventDefault();
-            goto(event.target.href);
-        }
-    })
-}
+function getRenderingDataRequestUrl(to: string | URL) {
+    if (typeof (to) === "string") {
+        to = new URL(to, location.href);
+    }
 
-export function addPopstateHandler() {
-    window.addEventListener('popstate', (event) => {
-        event.preventDefault();
-        goto(location.href, { type: 'none' });
-    })
+    const renderingDataRequestUrl = new URL('/__xvelte__/navigation', location.origin);
+    renderingDataRequestUrl.searchParams.set('to', to.pathname);
+    return renderingDataRequestUrl;
 }
