@@ -1,17 +1,25 @@
+import * as devalue from 'devalue';
 export class FragManager {
     head = null;
     body = null;
     fragIds = [];
     fragsDataMap = new Map();
-    fragReady;
-    resolveFragReady;
+    ready;
+    resolveReady;
     componentInstanceMap = new Map();
     constructor() {
         let resolve = () => void 0;
-        this.fragReady = new Promise((res) => {
+        this.ready = new Promise((res) => {
             resolve = res;
         });
-        this.resolveFragReady = resolve;
+        this.resolveReady = resolve;
+    }
+    /**
+     * 준비 작업
+     */
+    getReady() {
+        this.findFrags();
+        this.resolveReady();
     }
     /**
      * 첫 페이지 로드 시 dom에서 xvelte fragment들을 찾아놓기. 이후 페이지 이동 시 사용.
@@ -21,7 +29,6 @@ export class FragManager {
         let headEnd = null;
         let currentStart = null;
         let currentId = null;
-        const renderingDataElements = [];
         let inFragFlag = false;
         let headFrag = document.createElement('template');
         document.head.childNodes.forEach((node) => {
@@ -49,11 +56,6 @@ export class FragManager {
                     body
                 });
                 this.fragIds.push(currentId);
-                renderingDataElements.push({
-                    id: currentId,
-                    head: headFrag.innerHTML,
-                    body: body.innerHTML
-                });
                 currentStart = null;
                 currentId = null;
                 inFragFlag = false;
@@ -71,7 +73,11 @@ export class FragManager {
             };
         }
         this.body = document.querySelector('xvelte-body');
-        this.resolveFragReady();
+        //@ts-expect-error
+        const renderingData = devalue.unflatten(window.__xvelte_temp__.renderingData);
+        window.__xvelte__.history.original.replaceState({
+            renderingData: renderingData
+        }, "");
     }
     /**
      * 클라이언트 렌더링 컴포넌트를 등록
@@ -176,6 +182,6 @@ export class FragManager {
     }
 }
 const fragManager = new FragManager();
-window.addEventListener('DOMContentLoaded', () => fragManager.findFrags());
+window.addEventListener('DOMContentLoaded', () => fragManager.getReady());
 export { fragManager };
 //# sourceMappingURL=fragManager.js.map

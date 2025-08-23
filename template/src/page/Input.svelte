@@ -1,9 +1,10 @@
 <script lang="ts">
     let value = $state("");
-    import { goto, page } from "../../../library/client";
+    import { goto, page, navigating } from "../../../library/client";
 
     $effect(() => {
         console.log($page.state);
+        console.log($navigating);
     })
 </script>
 

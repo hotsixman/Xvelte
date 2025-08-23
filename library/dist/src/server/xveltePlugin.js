@@ -2,7 +2,7 @@ import path from 'node:path';
 import { compile, compileModule } from "svelte/compiler";
 import { createHash } from "node:crypto";
 import { build } from "esbuild";
-import fs from "node:fs";
+import fs, { read } from "node:fs";
 import { XvelteApp } from "./XvelteApp.js";
 /**
  * @todo 개발서버 일 때, client 컴포넌트들을 별도의 폴더에 번들링하여 저장해놓기
@@ -50,6 +50,11 @@ export default function xveltePlugin() {
                 };
             }
         },
+        watchChange(id, change) {
+            if (clientSvelteFilePaths.has(id) && change.event === 'delete') {
+                clientSvelteFilePaths.delete(id);
+            }
+        },
         async resolveId(id) {
             if (id.startsWith('/__xvelte__/client')) {
                 return {
@@ -71,8 +76,9 @@ export default function xveltePlugin() {
                 return compiled.js;
             }
             else if (id.endsWith('.svelte?client')) {
-                clientSvelteFilePaths.add(id);
-                return `const path = "/__xvelte__/client/${generateHash(id)}.js"; export default path;`;
+                const realId = id.replace(/\?client$/, '');
+                clientSvelteFilePaths.add(realId);
+                return `const path = "/__xvelte__/client/${generateHash(realId)}.js"; export default path;`;
             }
             if (id.endsWith('.svelte.js')) {
                 return compileModule(code, {}).js;
@@ -124,12 +130,14 @@ export default function xveltePlugin() {
         if (!fs.existsSync(xvelteClientScriptPath)) {
             xvelteClientScriptPath = path.resolve(import.meta.dirname, '..', 'client', 'xvelte.js');
         }
+        /*
         if (!fs.existsSync(path.resolve(dir, 'client'))) {
             fs.mkdirSync(path.resolve(dir, 'client'), { recursive: true });
         }
         fs.writeFileSync(path.resolve(dir, 'client', '_svelte.js'), "import {mount} from 'svelte'; window.__mount__ = mount;", 'utf-8');
+        */
         const entryPoints = {
-            [path.resolve(dir, 'client', 'svelte')]: xvelteClientScriptPath
+            [path.resolve(dir, 'client', 'xvelte')]: xvelteClientScriptPath
         };
         clientSvelteFilePaths.forEach((original) => {
             entryPoints[path.resolve(dir, 'client', generateHash(original))] = original;
@@ -162,7 +170,6 @@ export default function xveltePlugin() {
             ]
         });
         devFileChanged = false;
-        clientSvelteFilePaths.clear();
     }
 }
 //# sourceMappingURL=xveltePlugin.js.map

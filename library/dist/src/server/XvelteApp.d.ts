@@ -1,6 +1,6 @@
 import { type ServerResponse } from "node:http";
 import cookie from 'cookie';
-import type { PageHandler, IncomingMessage, RequestHandler, RouteParams } from "./types.js";
+import type { PageHandler, IncomingMessage, RequestHandler, RouteParams, AnyRequestEvent } from "./types.js";
 export declare class XvelteApp {
     private template;
     private pageHandlerMap;
@@ -15,10 +15,31 @@ export declare class XvelteApp {
     put<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>): void;
     delete<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>): void;
     all<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>): void;
+    /**
+     * HTTP 요청 핸들러. Node http 모듈, Express 등에서 사용 가능.
+     * @param req
+     * @param res
+     * @returns
+     */
     handle(req: IncomingMessage, res: ServerResponse): Promise<ServerResponse<import("http").IncomingMessage> | undefined>;
     listen(port: number, callback?: (error?: Error) => any): void;
+    /**
+     * 특정 경로에 해당하는 핸들러, url 파라미터, 페이지 핸들러 여부를 반환
+     * @param path
+     * @returns
+     */
     private getHandler;
+    /**
+     * 페이지 핸들러, url 파라미터를 반환
+     * @param path
+     * @returns
+     */
     private getPageHandler;
+    /**
+     * 요청 핸들러, url 파리미터를 반환
+     * @param path
+     * @returns
+     */
     private getRequestHandler;
     /**
      * `XvelteResponse`를 전송합니다. 전송이 완료되면 true, 그렇지 않으면 false를 반환합니다.
@@ -37,6 +58,11 @@ export declare class XvelteApp {
      * 페이지 전송(html)
      */
     private getPageResponse;
+    /**
+     * `/__xvelte__/navigation`으로 요청을 받았을 때 렌더링 데이터 반환
+     * @param event
+     * @returns
+     */
     private getNavigationResponse;
     private registerRequestHandler;
 }
@@ -49,13 +75,14 @@ export declare class RequestEvent<Route extends string | RegExp> {
     requestHeaders: Record<string, string>;
     locals: Record<string, any>;
     method: string;
-    private request;
+    request: IncomingMessage;
+    response: ServerResponse<import("http").IncomingMessage>;
     private requestCookie;
     private requestData;
     private responseHeader;
     private responseStatus;
     private responseCookie;
-    constructor(req: IncomingMessage);
+    constructor(req: IncomingMessage, res: ServerResponse);
     setHeader(key: string, value: string | number | string[]): void;
     setStatus(status: number): void;
     getStatus(): number;
@@ -68,4 +95,7 @@ export declare class RequestEvent<Route extends string | RegExp> {
     json(): Promise<any>;
     blob(): Promise<Blob>;
     buffer(): Promise<Buffer<ArrayBuffer>>;
+}
+export declare namespace RequestEvent {
+    function setParams(event: AnyRequestEvent, params: Record<string, string>): void;
 }

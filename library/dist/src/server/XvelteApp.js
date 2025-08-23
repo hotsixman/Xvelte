@@ -1,13 +1,13 @@
 import { createServer } from "node:http";
 import { HTMLElement, parse as parseHtml } from 'node-html-parser';
 import { render } from "svelte/server";
-import express, {} from 'express';
 import fs, { ReadStream } from 'node:fs';
 import path from "node:path";
 import mime from 'mime-types';
 import pathToRegexp from "path-to-regexp";
 import cookie from 'cookie';
 import { hash } from "node:crypto";
+import * as devalue from 'devalue';
 if (typeof (process.env.isDev) === "undefined") {
     process.env.isDev = false;
 }
@@ -51,15 +51,21 @@ export class XvelteApp {
     all(route, handler) {
         this.registerRequestHandler(route, handler, 'all');
     }
+    /**
+     * HTTP 요청 핸들러. Node http 모듈, Express 등에서 사용 가능.
+     * @param req
+     * @param res
+     * @returns
+     */
     async handle(req, res) {
         try {
-            const event = new RequestEvent(req);
+            const event = new RequestEvent(req, res);
             if (await this.sendResponse(event, await this.getXvelteClientFileResponse(event), res))
                 return;
             if (await this.sendResponse(event, await this.getNavigationResponse(event), res))
                 return;
             const { handler, params, isPageHandler } = this.getHandler(event.url.pathname);
-            event.params = params;
+            RequestEvent.setParams(event, params);
             if (handler) {
                 let response;
                 if (isPageHandler) {
@@ -75,6 +81,7 @@ export class XvelteApp {
             return res.end('404 Error');
         }
         catch (err) {
+            console.error(err);
             res.statusCode = 500;
             return res.end();
         }
@@ -85,6 +92,11 @@ export class XvelteApp {
         });
         app.listen(port, callback);
     }
+    /**
+     * 특정 경로에 해당하는 핸들러, url 파라미터, 페이지 핸들러 여부를 반환
+     * @param path
+     * @returns
+     */
     getHandler(path) {
         let handler = null;
         let params = {};
@@ -102,6 +114,11 @@ export class XvelteApp {
         }
         return { handler, params, isPageHandler: false };
     }
+    /**
+     * 페이지 핸들러, url 파라미터를 반환
+     * @param path
+     * @returns
+     */
     getPageHandler(path) {
         let handler = null;
         let params = {};
@@ -124,6 +141,11 @@ export class XvelteApp {
         }
         return { handler, params };
     }
+    /**
+     * 요청 핸들러, url 파리미터를 반환
+     * @param path
+     * @returns
+     */
     getRequestHandler(path) {
         let handler = null;
         let params = {};
@@ -176,7 +198,6 @@ export class XvelteApp {
             return true;
         }
         if (response === null) {
-            res.end();
             return true;
         }
         if (response instanceof ReadStream) {
@@ -265,7 +286,7 @@ export class XvelteApp {
         if (!pageHandleData) {
             return null;
         }
-        const rendered = this.renderPage(pageHandleData);
+        const renderingData = this.renderPage(pageHandleData);
         const dom = parseHtml(this.template, { comment: true });
         const xvelteHead = dom.querySelector('xvelte-head');
         if (xvelteHead) {
@@ -274,23 +295,32 @@ export class XvelteApp {
                 newXvelteHead.innerHTML += '<script type="module" src="/@vite/client"></script>';
             }
             newXvelteHead.innerHTML += `<style>${XvelteApp.css}</style>`;
-            newXvelteHead.innerHTML += '<script type="module" src="/__xvelte__/client/svelte.js"></script>';
-            [...rendered.layouts, rendered.page].forEach((layout) => {
+            newXvelteHead.innerHTML += '<script type="module" src="/__xvelte__/client/xvelte.js"></script>';
+            [...renderingData.layouts, renderingData.page].forEach((layout) => {
                 const frag = parseHtml(`<!--xvelte-headfrag-${layout.id}-->`, { comment: true });
                 frag.innerHTML += layout.head;
                 frag.innerHTML += `<!--/xvelte-headfrag-${layout.id}-->`;
                 newXvelteHead.innerHTML += frag.innerHTML;
             });
+            // RenderingData를 넘기기
+            newXvelteHead.innerHTML += `
+            <script>
+            window.__xvelte_temp__ = {
+                renderingData: ${devalue.stringify(renderingData)}
+            };
+            document.currentScript?.remove();
+            </script>
+            `;
             newXvelteHead.innerHTML += '<!--/xvelte-head-->';
             xvelteHead.replaceWith(newXvelteHead);
         }
         const xvelteBody = dom.querySelector('xvelte-body');
         if (xvelteBody) {
-            if (rendered.layouts.length > 0) {
-                const topLayoutFrag = parseHtml(`<xvelte-frag data-frag-id="${rendered.layouts[0].id}">${rendered.layouts[0].body}</xvelte-frag>`).children[0];
+            if (renderingData.layouts.length > 0) {
+                const topLayoutFrag = parseHtml(`<xvelte-frag data-frag-id="${renderingData.layouts[0].id}">${renderingData.layouts[0].body}</xvelte-frag>`).children[0];
                 let frag = topLayoutFrag;
-                for (let i = 1; i < rendered.layouts.length; i++) {
-                    const layout = rendered.layouts[i];
+                for (let i = 1; i < renderingData.layouts.length; i++) {
+                    const layout = renderingData.layouts[i];
                     const slot = frag.getElementsByTagName('xvelte-slot')[0];
                     if (slot) {
                         frag = parseHtml(`<xvelte-frag data-frag-id="${layout.id}">${layout.body}</xvelte-frag>`).children[0];
@@ -299,20 +329,25 @@ export class XvelteApp {
                 }
                 const slot = frag.getElementsByTagName('xvelte-slot')[0];
                 if (slot) {
-                    frag = parseHtml(`<xvelte-frag data-frag-id="${rendered.page.id}">${rendered.page.body}</xvelte-frag>`).children[0];
+                    frag = parseHtml(`<xvelte-frag data-frag-id="${renderingData.page.id}">${renderingData.page.body}</xvelte-frag>`).children[0];
                     slot.replaceWith(frag);
                 }
                 ;
                 xvelteBody.innerHTML = topLayoutFrag.outerHTML;
             }
             else {
-                const frag = parseHtml(`<xvelte-frag data-frag-id="${rendered.page.id}">${rendered.page.body}</xvelte-frag>`);
+                const frag = parseHtml(`<xvelte-frag data-frag-id="${renderingData.page.id}">${renderingData.page.body}</xvelte-frag>`);
                 xvelteBody.innerHTML = frag.innerHTML;
             }
         }
         event.setHeader('content-type', 'text/html');
         return dom.innerHTML;
     }
+    /**
+     * `/__xvelte__/navigation`으로 요청을 받았을 때 렌더링 데이터 반환
+     * @param event
+     * @returns
+     */
     async getNavigationResponse(event) {
         if (event.url.pathname !== "/__xvelte__/navigation")
             return false;
@@ -326,7 +361,7 @@ export class XvelteApp {
         if (!handler)
             return false;
         event.url = to;
-        event.params = params;
+        RequestEvent.setParams(event, params);
         const renderingData = await handler(event);
         if (!renderingData)
             return null;
@@ -405,18 +440,20 @@ export class RequestEvent {
     locals = {};
     method;
     request;
+    response;
     requestCookie;
     requestData;
     responseHeader = {};
     responseStatus = 200;
     responseCookie = {};
-    constructor(req) {
+    constructor(req, res) {
         const baseUrl = req.headers.origin ? req.headers.origin :
             req.headers.host ? `http://${req.headers.host}` : 'http://localhost';
         const url = new URL(req.url ?? '', baseUrl);
         this.url = url;
         this.method = (req.method ?? 'get').toLowerCase();
         this.request = req;
+        this.response = res;
         this.requestHeaders = req.headers;
         this.requestData = new Promise((resolve, reject) => {
             const body = [];
@@ -461,6 +498,12 @@ export class RequestEvent {
         return await this.requestData;
     }
 }
+(function (RequestEvent) {
+    function setParams(event, params) {
+        event.params = params;
+    }
+    RequestEvent.setParams = setParams;
+})(RequestEvent || (RequestEvent = {}));
 function pathify(path_) {
     return new URL(path_, 'http://void').pathname;
 }

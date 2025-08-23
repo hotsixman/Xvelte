@@ -7,10 +7,14 @@ export declare class FragManager {
     body: HTMLElement | null;
     fragIds: string[];
     fragsDataMap: Map<string, FragData>;
-    fragReady: Promise<void>;
-    private resolveFragReady;
+    ready: Promise<void>;
+    private resolveReady;
     private componentInstanceMap;
     constructor();
+    /**
+     * 준비 작업
+     */
+    getReady(): void;
     /**
      * 첫 페이지 로드 시 dom에서 xvelte fragment들을 찾아놓기. 이후 페이지 이동 시 사용.
      */
@@ -30,7 +34,7 @@ export declare class FragManager {
         body: string;
     }[]): {
         headFrags: DocumentFragment[];
-        bodyFrag: null;
+        bodyFrag: HTMLElement | null;
         fragDatas: (FragData & {
             scripts: HTMLScriptElement[];
         })[];
