@@ -11,6 +11,7 @@ import type { PageHandler, IncomingMessage, PageHandleData, RequestHandler, AnyP
 import { hash } from "node:crypto";
 import type { RenderingData } from "../types.js";
 import * as devalue from 'devalue';
+import Busboy from 'busboy';
 
 if (typeof (process.env.isDev) === "undefined") {
     process.env.isDev = false;
@@ -94,7 +95,7 @@ export class XvelteApp {
             res.statusCode = 404;
             return res.end('404 Error');
         }
-        catch(err){
+        catch (err) {
             console.error(err);
             res.statusCode = 500;
             return res.end();
@@ -201,10 +202,10 @@ export class XvelteApp {
         }
 
         const event = event_ as unknown as NotPrivateRequestEvent<any>;
-        res.writeHead(event.responseStatus, {
+        res.writeHead(event.status, {
             ...event.responseHeader,
             'set-cookie': Object.values(event.responseCookie)
-        })
+        });
 
         if (response instanceof ArrayBuffer) {
             res.end(Buffer.from(response));
@@ -223,6 +224,9 @@ export class XvelteApp {
             return true;
         }
         if (response === null) {
+            if (!res.writableEnded) {
+                res.end();
+            }
             return true;
         }
         if (response instanceof ReadStream) {
@@ -256,7 +260,7 @@ export class XvelteApp {
         if (event.url.pathname.startsWith('/__xvelte__/client')) {
             const filePath = process.env.isDev ? path.join(process.cwd(), '.xvelte', event.url.pathname.replace(/\/__xvelte__\//, '')) : path.join(import.meta.dirname, event.url.pathname);
             if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-                event.setStatus(404);
+                event.status = 404;
                 return null;
             }
 
@@ -493,7 +497,7 @@ interface NotPrivateRequestEvent<Route extends string | RegExp> {
     request: IncomingMessage;
     requestCookie: Record<string, string | undefined>;
     responseHeader: Record<string, string>;
-    responseStatus: number;
+    status: number;
     responseCookie: Record<string, string>;
 }
 export class RequestEvent<Route extends string | RegExp> {
@@ -503,13 +507,25 @@ export class RequestEvent<Route extends string | RegExp> {
     requestHeaders: Record<string, string>;
     locals: Record<string, any> = {};
     method: string;
+    status: number = 200;
+    cookie = {
+        get: (key: string) => {
+            return this.requestCookie[key] ?? null;
+        },
+        set: (key: string, value: string, option: cookie.SerializeOptions & { path: string }) => {
+            this.responseCookie[key] = cookie.serialize(key, value, option);
+        },
+        delete: (key: string, option: { path: string }) => {
+            delete this.responseCookie[key];
+            this.responseCookie[key] = cookie.serialize(key, "", { path: option.path, maxAge: 0 });
+        }
+    }
 
     request;
     response;
     private requestCookie;
     private requestData: Promise<Buffer<ArrayBuffer>>;
     private responseHeader: Record<string, string | number | string[]> = {};
-    private responseStatus: number = 200;
     private responseCookie: Record<string, string> = {};
 
     constructor(req: IncomingMessage, res: ServerResponse) {
@@ -539,18 +555,6 @@ export class RequestEvent<Route extends string | RegExp> {
     setHeader(key: string, value: string | number | string[]) {
         this.responseHeader[key] = value;
     }
-    setStatus(status: number) {
-        this.responseStatus = status;
-    }
-    getStatus() {
-        return this.responseStatus;
-    }
-    getCookie(key: string) {
-        return this.requestCookie[key] ?? null;
-    }
-    setCookie(key: string, value: string, option: cookie.SerializeOptions & { path: string }) {
-        this.responseCookie[key] = cookie.serialize(key, value, option);
-    }
     getClientAddress() {
         return this.requestHeaders['x-forwarded-for'] ?? this.request.socket.remoteAddress ?? '';
     }
@@ -566,9 +570,38 @@ export class RequestEvent<Route extends string | RegExp> {
     async buffer() {
         return await this.requestData;
     }
+    form() {
+        return new Promise<{ fields: Record<string, string>, files: Record<string, { filename: string; mimeType: string; buffer: Buffer; }> }>(async (resolve, reject) => {
+            const busboy = Busboy({ headers: this.requestHeaders });
+            const fields: Record<string, string> = {};
+            const files: Record<string, { filename: string; mimeType: string; buffer: Buffer; }> = {};
+
+            busboy.on("file", (fieldname, file, info) => {
+                const chunks: Buffer[] = [];
+                file.on("data", chunk => chunks.push(chunk));
+                file.on("end", () => {
+                    files[fieldname] = {
+                        filename: info.filename,
+                        mimeType: info.mimeType,
+                        buffer: Buffer.concat(chunks), // ✅ 파일 Buffer
+                    };
+                });
+            });
+
+            busboy.on("field", (fieldname, val) => {
+                fields[fieldname] = val;
+            });
+
+            busboy.on("finish", () => resolve({ fields, files }));
+            busboy.on("error", reject);
+
+            // ✅ 이미 모인 Buffer를 스트림처럼 밀어넣기
+            busboy.end(await this.requestData);
+        })
+    }
 }
-export namespace RequestEvent{
-    export function setParams(event: AnyRequestEvent, params: Record<string, string>){
+export namespace RequestEvent {
+    export function setParams(event: AnyRequestEvent, params: Record<string, string>) {
         event.params = params
     }
 }

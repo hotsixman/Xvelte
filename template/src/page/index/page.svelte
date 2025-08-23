@@ -13,6 +13,10 @@
 <Island component={Counter} props={{init: 5}} on="click">
     <button>서버</button>
 </Island>
+<form action="/test" method="post" enctype="multipart/form-data">
+    <input type="file" name="f">
+    <button type="submit">asd</button>
+</form>
 
 <style>
     div {

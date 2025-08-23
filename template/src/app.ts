@@ -3,6 +3,7 @@ import template from './app.html?raw';
 import Layout from "./page/layout.svelte";
 import IndexPage from "./page/index/page.svelte";
 import AboutPage from "./page/about/page.svelte";
+import fs from 'node:fs';
 
 const app = new XvelteApp(template);
 
@@ -23,8 +24,9 @@ app.page('/about', () => ({
     component: AboutPage
 }))
 
-app.get('/test', (event) => {
-    event.response.end('fuck you');
+app.post('/test', async (event) => {
+    const formData = await event.form();
+    console.log(formData);
     return null;
 })
 
