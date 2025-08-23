@@ -1,4 +1,5 @@
-import type { FragData, RenderingDataElement } from "../types.js";
+import type { FragData } from "../types.js";
+import * as devalue from 'devalue';
 
 export class FragManager {
     head: { start: Comment, end: Comment } | null = null;
@@ -6,17 +7,25 @@ export class FragManager {
     fragIds: string[] = [];
     fragsDataMap = new Map<string, FragData>();
 
-    fragReady: Promise<void>
-    private resolveFragReady: () => void;
+    ready: Promise<void>
+    private resolveReady: () => void;
 
     private componentInstanceMap = new Map<string, Record<string, any>[]>();
 
     constructor() {
         let resolve: () => void = () => void 0;
-        this.fragReady = new Promise((res) => {
+        this.ready = new Promise((res) => {
             resolve = res;
         });
-        this.resolveFragReady = resolve;
+        this.resolveReady = resolve;
+    }
+
+    /**
+     * 준비 작업
+     */
+    getReady() {
+        this.findFrags();
+        this.resolveReady();
     }
 
     /**
@@ -28,8 +37,6 @@ export class FragManager {
 
         let currentStart: Comment | null = null;
         let currentId: string | null = null;
-
-        const renderingDataElements: RenderingDataElement[] = [];
 
         let inFragFlag = false;
         let headFrag = document.createElement('template');
@@ -58,12 +65,6 @@ export class FragManager {
                 });
                 this.fragIds.push(currentId);
 
-                renderingDataElements.push({
-                    id: currentId,
-                    head: headFrag.innerHTML,
-                    body: body.innerHTML
-                })
-
                 currentStart = null;
                 currentId = null;
                 inFragFlag = false;
@@ -83,16 +84,12 @@ export class FragManager {
         }
         this.body = document.querySelector('xvelte-body') as HTMLElement;
 
-        /*
-        history.replaceState({
-            renderingData: {
-                layouts: renderingDataElements.slice(0, -1),
-                page: renderingDataElements[renderingDataElements.length - 1]
-            } as RenderingData
-        }, "");
-        */
+        //@ts-expect-error
+        const renderingData = devalue.unflatten(window.__xvelte_temp__.renderingData);
 
-        this.resolveFragReady();
+        window.__xvelte__.history.original.replaceState({
+            renderingData: renderingData
+        }, "");
     }
 
     /**
@@ -209,6 +206,6 @@ export class FragManager {
 }
 
 const fragManager = new FragManager();
-window.addEventListener('DOMContentLoaded', () => fragManager.findFrags());
+window.addEventListener('DOMContentLoaded', () => fragManager.getReady());
 
 export { fragManager }

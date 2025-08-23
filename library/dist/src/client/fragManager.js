@@ -71,14 +71,6 @@ export class FragManager {
             };
         }
         this.body = document.querySelector('xvelte-body');
-        /*
-        history.replaceState({
-            renderingData: {
-                layouts: renderingDataElements.slice(0, -1),
-                page: renderingDataElements[renderingDataElements.length - 1]
-            } as RenderingData
-        }, "");
-        */
         this.resolveFragReady();
     }
     /**

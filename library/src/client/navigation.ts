@@ -1,10 +1,17 @@
-import type { FragData, RenderingData, RenderingDataElement } from "../types.js";
+import { get } from "svelte/store";
+import { type FragData, type RenderingData, type RenderingDataElement } from "../types.js";
 import type { FragManager } from "./fragManager.js";
+import { loadPageData } from "./store.js";
+
+const getReplaceState = () => window.__xvelte__.history.original.replaceState;
+const getPushState = () => window.__xvelte__.history.original.pushState;
 
 export async function goto(to: string | URL, option?: { type?: 'push' | 'replace', state?: Record<string, any> }) {
     const fragManager = window.__xvelte__.fragManager;
-    await fragManager.fragReady;
+    await fragManager.ready;
 
+    to = pathToUrl(to);
+    setNavigatingStore(to);
     const renderingDataRequestUrl = getRenderingDataRequestUrl(to);
     const renderingData: RenderingData = await fetch(renderingDataRequestUrl).then((res) => res.json());
 
@@ -14,7 +21,7 @@ export async function goto(to: string | URL, option?: { type?: 'push' | 'replace
 
     switch (option?.type) {
         case 'replace': {
-            history.replaceState({
+            getReplaceState()({
                 renderingData,
                 pageState: option?.state ?? {}
             }, "", to);
@@ -22,7 +29,7 @@ export async function goto(to: string | URL, option?: { type?: 'push' | 'replace
         }
         case undefined:
         case 'push': {
-            history.pushState({
+            getPushState()({
                 renderingData,
                 pageState: option?.state ?? {}
             }, "", to);
@@ -35,8 +42,8 @@ export async function goto(to: string | URL, option?: { type?: 'push' | 'replace
     const { headFrags, bodyFrag, fragDatas } = fragManager.createFrag(renderingDataElements.slice(diffrentFrom));
     insertHeadFrag(headFrags, fragManager);
     insertBodyFrag(bodyFrag, replacedFrag);
-
     activeScripts(fragDatas, fragManager);
+    navigationEnded();
 }
 
 export function addAnchorClickHandler() {
@@ -51,16 +58,18 @@ export function addAnchorClickHandler() {
 export function addPopstateHandler() {
     window.addEventListener('popstate', async (event) => {
         event.preventDefault();
+        const to = pathToUrl(location.href);
+        setNavigatingStore(to);
         let renderingData = event.state?.renderingData;
         if (!renderingData) {
-            renderingData = await fetch(getRenderingDataRequestUrl(location.href)).then((res) => res.json());
-            history.replaceState({
+            renderingData = await fetch(getRenderingDataRequestUrl(to)).then((res) => res.json());
+            getReplaceState()({
                 renderingData,
                 pageState: event.state?.pageState ?? {}
             }, "");
         }
         const fragManager = window.__xvelte__.fragManager;
-        await fragManager.fragReady;
+        await fragManager.ready;
         const renderingDataElements = [...renderingData.layouts, renderingData.page];
         const diffrentFrom = findDifferentIndex(renderingDataElements, fragManager);
         const replacedFrag = getReplacedFragment(fragManager, diffrentFrom);
@@ -69,7 +78,46 @@ export function addPopstateHandler() {
         insertHeadFrag(headFrags, fragManager);
         insertBodyFrag(bodyFrag, replacedFrag);
         activeScripts(fragDatas, fragManager);
+        navigationEnded();
     })
+}
+
+export function stealHistoryApi() {
+    const replaceState = window.history.replaceState.bind(window.history);
+    const pushState = window.history.pushState.bind(window.history);
+
+    const originalHistoryApi = {
+        replaceState,
+        pushState
+    }
+
+    const historyApi = {
+        replaceState(data, url) {
+            replaceState({
+                renderingData: history.state?.renderingData,
+                pageState: data
+            }, "", url);
+            window.__xvelte__.page.set(loadPageData())
+        },
+        pushState(data, url) {
+            pushState({
+                renderingData: history.state?.renderingData,
+                pageState: data
+            }, "", url);
+            window.__xvelte__.page.set(loadPageData())
+        }
+    } as Window['__xvelte__']['history'];
+
+    window.history.replaceState = function (data, unused, url) {
+        console.error("Using 'history.replaceState' may cause Xvelte’s system to malfunction. Please use the 'replaceState' function from @hotsixman/xvelte/client instead.");
+        replaceState(data, unused, url);
+    };
+    window.history.pushState = (data, unused, url) => {
+        console.error("Using 'history.pushState' may cause Xvelte’s system to malfunction. Please use the 'pushState' function from @hotsixman/xvelte/client instead.");
+        pushState(data, unused, url);
+    }
+
+    return { historyApi, originalHistoryApi };
 }
 
 /**
@@ -156,7 +204,14 @@ function activeScripts(fragDatas: (FragData & { scripts: HTMLScriptElement[]; })
     });
 }
 
-function getRenderingDataRequestUrl(to: string | URL) {
+function pathToUrl(to: string | URL) {
+    if (typeof (to) === "string") {
+        return new URL(to, location.href);
+    }
+    return to;
+}
+
+function getRenderingDataRequestUrl(to: URL) {
     if (typeof (to) === "string") {
         to = new URL(to, location.href);
     }
@@ -164,4 +219,16 @@ function getRenderingDataRequestUrl(to: string | URL) {
     const renderingDataRequestUrl = new URL('/__xvelte__/navigation', location.origin);
     renderingDataRequestUrl.searchParams.set('to', to.pathname);
     return renderingDataRequestUrl;
+}
+
+function setNavigatingStore(to: URL) {
+    window.__xvelte__.navigating.set({
+        from: new URL(get(window.__xvelte__.page).url),
+        to
+    })
+}
+
+function navigationEnded() {
+    window.__xvelte__.navigating.set(null);
+    window.__xvelte__.page.set(loadPageData())
 }

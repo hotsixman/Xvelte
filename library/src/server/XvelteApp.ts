@@ -9,6 +9,8 @@ import pathToRegexp from "path-to-regexp";
 import cookie from 'cookie';
 import type { PageHandler, IncomingMessage, PageHandleData, RequestHandler, AnyPageHandler, AnyRequestHandler, RouteParams, XvelteResponse, AnyRequestEvent } from "./types.js";
 import { hash } from "node:crypto";
+import type { RenderingData } from "../types.js";
+import * as devalue from 'devalue';
 
 if (typeof (process.env.isDev) === "undefined") {
     process.env.isDev = false;
@@ -62,6 +64,12 @@ export class XvelteApp {
         this.registerRequestHandler(route, handler, 'all');
     }
 
+    /**
+     * HTTP 요청 핸들러. Node http 모듈, Express 등에서 사용 가능.
+     * @param req 
+     * @param res 
+     * @returns 
+     */
     async handle(req: IncomingMessage, res: ServerResponse) {
         try {
             const event = new RequestEvent(req, res);
@@ -100,6 +108,11 @@ export class XvelteApp {
         app.listen(port, callback);
     }
 
+    /**
+     * 특정 경로에 해당하는 핸들러, url 파라미터, 페이지 핸들러 여부를 반환
+     * @param path 
+     * @returns 
+     */
     private getHandler(path: string) {
         let handler: AnyPageHandler | AnyRequestHandler | null = null;
         let params: Record<string, string> = {};
@@ -121,6 +134,11 @@ export class XvelteApp {
         return { handler, params, isPageHandler: false } as { handler: null, params: Record<string, string>, isPageHandler: false };
     }
 
+    /**
+     * 페이지 핸들러, url 파라미터를 반환
+     * @param path 
+     * @returns 
+     */
     private getPageHandler(path: string) {
         let handler: AnyPageHandler | null = null;
         let params: Record<string, any> = {};
@@ -145,6 +163,11 @@ export class XvelteApp {
         return { handler, params };
     }
 
+    /**
+     * 요청 핸들러, url 파리미터를 반환
+     * @param path 
+     * @returns 
+     */
     private getRequestHandler(path: string) {
         let handler: AnyPageHandler | AnyRequestHandler | null = null;
         let params: Record<string, any> = {};
@@ -250,7 +273,7 @@ export class XvelteApp {
     /**
      * 페이지 핸들러로 렌더링
      */
-    private renderPage(data: PageHandleData<any, any>) {
+    private renderPage(data: PageHandleData<any, any>): RenderingData {
         const context = new Map<string, any>();
 
         const layouts = (data.layouts ?? []).map((l) => {
@@ -297,7 +320,7 @@ export class XvelteApp {
             return null;
         }
 
-        const rendered = this.renderPage(pageHandleData);
+        const renderingData = this.renderPage(pageHandleData);
         const dom = parseHtml(this.template, { comment: true });
 
         const xvelteHead = dom.querySelector('xvelte-head');
@@ -308,24 +331,33 @@ export class XvelteApp {
             }
             newXvelteHead.innerHTML += `<style>${XvelteApp.css}</style>`;
             newXvelteHead.innerHTML += '<script type="module" src="/__xvelte__/client/xvelte.js"></script>';
-            [...rendered.layouts, rendered.page].forEach((layout) => {
+            [...renderingData.layouts, renderingData.page].forEach((layout) => {
                 const frag = parseHtml(`<!--xvelte-headfrag-${layout.id}-->`, { comment: true });
                 frag.innerHTML += layout.head;
                 frag.innerHTML += `<!--/xvelte-headfrag-${layout.id}-->`;
                 newXvelteHead.innerHTML += frag.innerHTML;
             });
+            // RenderingData를 넘기기
+            newXvelteHead.innerHTML += `
+            <script>
+            window.__xvelte_temp__ = {
+                renderingData: ${devalue.stringify(renderingData)}
+            };
+            document.currentScript?.remove();
+            </script>
+            `
             newXvelteHead.innerHTML += '<!--/xvelte-head-->';
             xvelteHead.replaceWith(newXvelteHead);
         }
 
         const xvelteBody = dom.querySelector('xvelte-body');
         if (xvelteBody) {
-            if (rendered.layouts.length > 0) {
-                const topLayoutFrag = parseHtml(`<xvelte-frag data-frag-id="${rendered.layouts[0].id}">${rendered.layouts[0].body}</xvelte-frag>`).children[0] as HTMLElement;
+            if (renderingData.layouts.length > 0) {
+                const topLayoutFrag = parseHtml(`<xvelte-frag data-frag-id="${renderingData.layouts[0].id}">${renderingData.layouts[0].body}</xvelte-frag>`).children[0] as HTMLElement;
                 let frag = topLayoutFrag;
 
-                for (let i = 1; i < rendered.layouts.length; i++) {
-                    const layout = rendered.layouts[i];
+                for (let i = 1; i < renderingData.layouts.length; i++) {
+                    const layout = renderingData.layouts[i];
 
                     const slot = frag.getElementsByTagName('xvelte-slot')[0];
                     if (slot) {
@@ -336,13 +368,13 @@ export class XvelteApp {
 
                 const slot = frag.getElementsByTagName('xvelte-slot')[0];
                 if (slot) {
-                    frag = parseHtml(`<xvelte-frag data-frag-id="${rendered.page.id}">${rendered.page.body}</xvelte-frag>`).children[0] as HTMLElement;
+                    frag = parseHtml(`<xvelte-frag data-frag-id="${renderingData.page.id}">${renderingData.page.body}</xvelte-frag>`).children[0] as HTMLElement;
                     slot.replaceWith(frag);
                 };
                 xvelteBody.innerHTML = topLayoutFrag.outerHTML;
             }
             else {
-                const frag = parseHtml(`<xvelte-frag data-frag-id="${rendered.page.id}">${rendered.page.body}</xvelte-frag>`);
+                const frag = parseHtml(`<xvelte-frag data-frag-id="${renderingData.page.id}">${renderingData.page.body}</xvelte-frag>`);
                 xvelteBody.innerHTML = frag.innerHTML;
             }
         }
