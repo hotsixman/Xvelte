@@ -150,7 +150,6 @@ export default function xveltePlugin() {
             entryPoints,
             outdir: path.resolve(dir, 'client'),
             plugins: [
-                viteLikeAssets(),
                 esbuildSvelte({
                     compilerOptions: {
                         css: 'injected'
@@ -168,7 +167,21 @@ export default function xveltePlugin() {
                         });
                     }
                 }
-            ]
+            ],
+            loader: {
+                '.png': 'dataurl',
+                '.jpg': 'dataurl',
+                '.jpeg': 'dataurl',
+                '.gif': 'dataurl',
+                '.webp': 'dataurl',
+                '.avif': 'dataurl',
+                '.ico': 'dataurl',
+                '.ttf': 'dataurl',
+                '.woff': 'dataurl',
+                '.woff2': 'dataurl',
+                '.eot': 'dataurl',
+                '.svg': 'dataurl'
+            }
         });
         devFileChanged = false;
     }
@@ -202,33 +215,35 @@ export default function xveltePlugin() {
                         loader: 'js',
                     };
                 });
-                // --- ?url → 파일 URL 경로 (번들 후 asset 파일명) ---
-                build.onResolve({ filter: /\?url$/ }, (args) => {
-                    return {
-                        path: args.path.replace(/\?url$/, ''),
-                        namespace: 'file-url',
-                    };
-                });
-                build.onLoad({ filter: /.*/, namespace: 'file-url' }, async (args) => {
-                    const fileName = path.basename(args.path);
-                    return {
-                        contents: `export default ${JSON.stringify('/assets/' + fileName)}`,
-                        loader: 'js',
-                    };
-                });
                 // --- 기본 이미지/폰트 → file loader 흉내 ---
                 build.onResolve({
                     filter: /\.(png|jpe?g|gif|webp|avif|ico|ttf|woff2?|eot|svg)$/i,
                 }, (args) => {
-                    return {
-                        path: args.path,
-                        namespace: 'file-loader',
-                    };
+                    return { path: path.resolve(args.importer, args.path), namespace: 'file-inline' };
                 });
-                build.onLoad({ filter: /.*/, namespace: 'file-loader' }, async (args) => {
-                    const fileName = path.basename(args.path);
+                build.onLoad({ filter: /.*/, namespace: 'file-inline' }, async (args) => {
+                    const data = fs.readFileSync(args.path);
+                    const ext = path.extname(args.path).slice(1);
+                    let mime;
+                    // 이미지 MIME
+                    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'ico'].includes(ext)) {
+                        mime = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+                    }
+                    // 폰트 MIME
+                    else if (['ttf', 'woff', 'woff2', 'eot'].includes(ext)) {
+                        mime = ext === 'ttf' ? 'font/ttf' :
+                            ext === 'woff' ? 'font/woff' :
+                                ext === 'woff2' ? 'font/woff2' : 'application/octet-stream';
+                    }
+                    else if (ext === 'svg') {
+                        mime = 'image/svg+xml';
+                    }
+                    else {
+                        mime = 'application/octet-stream';
+                    }
+                    const base64 = data.toString('base64');
                     return {
-                        contents: `export default ${JSON.stringify('/assets/' + fileName)}`,
+                        contents: `export default "data:${mime};base64,${base64}"`,
                         loader: 'js',
                     };
                 });

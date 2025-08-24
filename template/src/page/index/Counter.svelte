@@ -1,23 +1,35 @@
 <script lang="ts">
-    interface Props{
-        init?: number;
-    }
-    let {init}: Props = $props();
+    let count = $state(0);
 
-    let count = $state(init ?? 0);
-    
-    function increase(){{
+    function increase(){
         count++;
-    }}
+    }
 </script>
 
 <button onclick={increase}>
-    {count}
+    Count is {count}
 </button>
 
 <style>
     button{
+        padding-block: 10px;
         padding-inline: 10px;
-        padding-block: 5px;
+
+        border-radius: 5px;
+
+        outline: 0;
+        border: 0;
+
+        background-color: rgb(228, 228, 228);
+
+        cursor: pointer;
+
+        &:hover{
+            background-color: rgb(210, 210, 210);
+        }
+
+        &:active{
+            background-color: rgb(228, 228, 228);
+        }
     }
 </style>
