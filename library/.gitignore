@@ -3,3 +3,5 @@ node_modules
 tests
 build
 .xvelte
+package-lock.json
+bun.lock

@@ -75,26 +75,37 @@ export declare class RequestEvent<Route extends string | RegExp> {
     requestHeaders: Record<string, string>;
     locals: Record<string, any>;
     method: string;
+    status: number;
+    cookie: {
+        get: (key: string) => string | null;
+        set: (key: string, value: string, option: cookie.SerializeOptions & {
+            path: string;
+        }) => void;
+        delete: (key: string, option: {
+            path: string;
+        }) => void;
+    };
     request: IncomingMessage;
     response: ServerResponse<import("http").IncomingMessage>;
     private requestCookie;
     private requestData;
     private responseHeader;
-    private responseStatus;
     private responseCookie;
     constructor(req: IncomingMessage, res: ServerResponse);
     setHeader(key: string, value: string | number | string[]): void;
-    setStatus(status: number): void;
-    getStatus(): number;
-    getCookie(key: string): string | null;
-    setCookie(key: string, value: string, option: cookie.SerializeOptions & {
-        path: string;
-    }): void;
     getClientAddress(): string;
     text(): Promise<string>;
     json(): Promise<any>;
     blob(): Promise<Blob>;
     buffer(): Promise<Buffer<ArrayBuffer>>;
+    form(): Promise<{
+        fields: Record<string, string>;
+        files: Record<string, {
+            filename: string;
+            mimeType: string;
+            buffer: Buffer;
+        }>;
+    }>;
 }
 export declare namespace RequestEvent {
     function setParams(event: AnyRequestEvent, params: Record<string, string>): void;

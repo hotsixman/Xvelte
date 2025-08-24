@@ -2,7 +2,7 @@
   "name": "@hotsixman/xvelte",
   "repository": "https://github.com/hotsixman/xvelte",
   "author": "hotsixman",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "main": "./dist/index.js",
   "exports": {
     ".": "./dist/index.js",
@@ -36,5 +36,8 @@
   "devDependencies": {
     "@types/busboy": "^1.5.4",
     "@types/jsesc": "^3.0.3"
+  },
+  "scripts": {
+    "build": "tsc"
   }
 }

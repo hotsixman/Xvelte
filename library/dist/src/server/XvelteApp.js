@@ -8,6 +8,7 @@ import pathToRegexp from "path-to-regexp";
 import cookie from 'cookie';
 import { hash } from "node:crypto";
 import * as devalue from 'devalue';
+import Busboy from 'busboy';
 if (typeof (process.env.isDev) === "undefined") {
     process.env.isDev = false;
 }
@@ -177,7 +178,7 @@ export class XvelteApp {
             return false;
         }
         const event = event_;
-        res.writeHead(event.responseStatus, {
+        res.writeHead(event.status, {
             ...event.responseHeader,
             'set-cookie': Object.values(event.responseCookie)
         });
@@ -198,6 +199,9 @@ export class XvelteApp {
             return true;
         }
         if (response === null) {
+            if (!res.writableEnded) {
+                res.end();
+            }
             return true;
         }
         if (response instanceof ReadStream) {
@@ -229,7 +233,7 @@ export class XvelteApp {
         if (event.url.pathname.startsWith('/__xvelte__/client')) {
             const filePath = process.env.isDev ? path.join(process.cwd(), '.xvelte', event.url.pathname.replace(/\/__xvelte__\//, '')) : path.join(import.meta.dirname, event.url.pathname);
             if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-                event.setStatus(404);
+                event.status = 404;
                 return null;
             }
             const mimeType = mime.contentType(path.basename(filePath));
@@ -439,12 +443,24 @@ export class RequestEvent {
     requestHeaders;
     locals = {};
     method;
+    status = 200;
+    cookie = {
+        get: (key) => {
+            return this.requestCookie[key] ?? null;
+        },
+        set: (key, value, option) => {
+            this.responseCookie[key] = cookie.serialize(key, value, option);
+        },
+        delete: (key, option) => {
+            delete this.responseCookie[key];
+            this.responseCookie[key] = cookie.serialize(key, "", { path: option.path, maxAge: 0 });
+        }
+    };
     request;
     response;
     requestCookie;
     requestData;
     responseHeader = {};
-    responseStatus = 200;
     responseCookie = {};
     constructor(req, res) {
         const baseUrl = req.headers.origin ? req.headers.origin :
@@ -470,18 +486,6 @@ export class RequestEvent {
     setHeader(key, value) {
         this.responseHeader[key] = value;
     }
-    setStatus(status) {
-        this.responseStatus = status;
-    }
-    getStatus() {
-        return this.responseStatus;
-    }
-    getCookie(key) {
-        return this.requestCookie[key] ?? null;
-    }
-    setCookie(key, value, option) {
-        this.responseCookie[key] = cookie.serialize(key, value, option);
-    }
     getClientAddress() {
         return this.requestHeaders['x-forwarded-for'] ?? this.request.socket.remoteAddress ?? '';
     }
@@ -496,6 +500,31 @@ export class RequestEvent {
     }
     async buffer() {
         return await this.requestData;
+    }
+    form() {
+        return new Promise(async (resolve, reject) => {
+            const busboy = Busboy({ headers: this.requestHeaders });
+            const fields = {};
+            const files = {};
+            busboy.on("file", (fieldname, file, info) => {
+                const chunks = [];
+                file.on("data", chunk => chunks.push(chunk));
+                file.on("end", () => {
+                    files[fieldname] = {
+                        filename: info.filename,
+                        mimeType: info.mimeType,
+                        buffer: Buffer.concat(chunks), // ✅ 파일 Buffer
+                    };
+                });
+            });
+            busboy.on("field", (fieldname, val) => {
+                fields[fieldname] = val;
+            });
+            busboy.on("finish", () => resolve({ fields, files }));
+            busboy.on("error", reject);
+            // ✅ 이미 모인 Buffer를 스트림처럼 밀어넣기
+            busboy.end(await this.requestData);
+        });
     }
 }
 (function (RequestEvent) {
