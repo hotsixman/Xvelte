@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@hotsixman/xvelte": "0.4.1"
+  },
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build"
+  }
+}
