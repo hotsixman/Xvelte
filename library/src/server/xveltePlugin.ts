@@ -156,6 +156,7 @@ export default function xveltePlugin(): Plugin {
             entryPoints,
             outdir: path.resolve(dir, 'client'),
             plugins: [
+                viteLikeAssets(),
                 esbuildSvelte({
                     compilerOptions: {
                         css: 'injected'
@@ -176,5 +177,83 @@ export default function xveltePlugin(): Plugin {
             ]
         });
         devFileChanged = false;
+    }
+
+    function viteLikeAssets(): EsbuildPlugin {
+        return {
+            name: 'vite-like-assets',
+            setup(build) {
+                //const textFileRegex = /\.(txt|glsl|md|svg|css|json)$/i
+
+                // --- ?raw → 파일 내용을 문자열로 import ---
+                build.onLoad({ filter: /\?raw$/ }, async (args) => {
+                    const filePath = args.path.replace(/\?raw$/, '')
+                    const contents = fs.readFileSync(filePath, 'utf8')
+                    return {
+                        contents: `export default ${JSON.stringify(contents)}`,
+                        loader: 'js',
+                    }
+                })
+
+                // --- ?inline → base64 data URL ---
+                build.onLoad({ filter: /\?inline$/ }, async (args) => {
+                    const filePath = args.path.replace(/\?inline$/, '')
+                    const data = fs.readFileSync(filePath)
+                    const ext = path.extname(filePath).slice(1)
+                    const mime =
+                        ext === 'svg'
+                            ? 'image/svg+xml'
+                            : ext === 'css'
+                                ? 'text/css'
+                                : `image/${ext}`
+                    const base64 = data.toString('base64')
+                    return {
+                        contents: `export default "data:${mime};base64,${base64}"`,
+                        loader: 'js',
+                    }
+                })
+
+                // --- ?url → 파일 URL 경로 (번들 후 asset 파일명) ---
+                build.onResolve({ filter: /\?url$/ }, (args) => {
+                    return {
+                        path: args.path.replace(/\?url$/, ''),
+                        namespace: 'file-url',
+                    }
+                })
+                build.onLoad({ filter: /.*/, namespace: 'file-url' }, async (args) => {
+                    const fileName = path.basename(args.path)
+                    return {
+                        contents: `export default ${JSON.stringify('/assets/' + fileName)}`,
+                        loader: 'js',
+                    }
+                })
+
+                // --- 기본 이미지/폰트 → file loader 흉내 ---
+                build.onResolve({
+                    filter: /\.(png|jpe?g|gif|webp|avif|ico|ttf|woff2?|eot|svg)$/i,
+                }, (args) => {
+                    return {
+                        path: args.path,
+                        namespace: 'file-loader',
+                    }
+                })
+                build.onLoad({ filter: /.*/, namespace: 'file-loader' }, async (args) => {
+                    const fileName = path.basename(args.path)
+                    return {
+                        contents: `export default ${JSON.stringify('/assets/' + fileName)}`,
+                        loader: 'js',
+                    }
+                })
+
+                // --- JSON → ESM (esbuild는 기본 loader로도 가능하지만 일관성을 위해 추가) ---
+                build.onLoad({ filter: /\.json$/ }, async (args) => {
+                    const json = fs.readFileSync(args.path, 'utf8')
+                    return {
+                        contents: `export default ${json}`,
+                        loader: 'js',
+                    }
+                })
+            },
+        }
     }
 }
