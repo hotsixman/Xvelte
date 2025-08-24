@@ -2,8 +2,8 @@ import type { Component } from "svelte";
 import type { IncomingMessage as IncomingMessage_ } from "node:http";
 import type { RequestEvent } from './XvelteApp.js';
 import type { ReadStream } from "node:fs";
-export type RequestHandler<Route extends string | RegExp> = (event: RequestEvent<Route>) => MaybePromise<XvelteResponse | null>;
-export type AnyRequestHandler = RequestHandler<any>;
+export type EndpointHandler<Route extends string | RegExp> = (event: RequestEvent<Route>) => MaybePromise<XvelteResponse | null>;
+export type AnyEndpointHandler = EndpointHandler<any>;
 export type AnyRequestEvent = RequestEvent<any>;
 export type PageHandler<Route extends string | RegExp, Props extends Record<string, any>, LayoutProps extends Record<string, any>[]> = (event: RequestEvent<Route>) => MaybePromise<PageHandleData<Props, LayoutProps> | null>;
 export type AnyPageHandler = PageHandler<any, any, any>;
@@ -23,6 +23,7 @@ export type PageHandleData<Props extends Record<string, any>, LayoutProps extend
 } : {
     props: Props;
 });
+export type RequestMethod = 'get' | 'post' | 'put' | 'delete' | 'all' | (string & {});
 export type XvelteResponse = ArrayBuffer | AsyncIterable<Uint8Array> | Blob | Buffer | FormData | Iterable<Uint8Array> | null | ReadStream | string | URLSearchParams | false;
 export type RouteParams<T extends string> = string extends T ? Record<string, string> : T extends `${string}:${infer Param}/${infer Rest}` ? {
     [K in Param | keyof RouteParams<`/${Rest}`>]: string;

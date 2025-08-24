@@ -24,7 +24,7 @@ app.page('/about', () => ({
     component: AboutPage
 }))
 
-app.post('/test', async (event) => {
+app.get('/test', async (event) => {
     const formData = await event.form();
     console.log(formData);
     return null;

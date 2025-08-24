@@ -11,6 +11,14 @@ app.page('/', () => {
             currentTimeStamp: new Date().toLocaleTimeString()
         }
     }
+});
+
+app.get('/test', () => {
+    return 'get'
+});
+
+app.post('/test', () => {
+    return 'post';
 })
 
 export default app;

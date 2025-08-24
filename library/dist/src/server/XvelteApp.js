@@ -16,12 +16,16 @@ export class XvelteApp {
     template;
     pageHandlerMap = new Map();
     pagePatternHandlerMap = new Map();
-    requestHandlerMap = new Map();
-    requestPatternHandlerMap = new Map();
+    endpointHandlerManager = new EndpointHandlerManager();
     componentIdMap = new ComponentIdMap();
     constructor(template) {
         this.template = template;
     }
+    /**
+     * 페이지 핸들러 추가
+     * @param route
+     * @param handler
+     */
     page(route, handler) {
         if (typeof (route) === "string") {
             const route_ = pathify(route);
@@ -37,20 +41,25 @@ export class XvelteApp {
             this.pagePatternHandlerMap.set(route, handler);
         }
     }
+    /** Get 엔드포인트 핸들러 추가 */
     get(route, handler) {
-        this.registerRequestHandler(route, handler, 'get');
+        this.endpointHandlerManager.set(route, 'get', handler);
     }
+    /** Post 엔드포인트 핸들러 추가 */
     post(route, handler) {
-        this.registerRequestHandler(route, handler, 'post');
+        this.endpointHandlerManager.set(route, 'post', handler);
     }
+    /** Put 엔드포인트 핸들러 추가 */
     put(route, handler) {
-        this.registerRequestHandler(route, handler, 'put');
+        this.endpointHandlerManager.set(route, 'put', handler);
     }
+    /** Delete 엔드포인트 핸들러 추가 */
     delete(route, handler) {
-        this.registerRequestHandler(route, handler, 'delete');
+        this.endpointHandlerManager.set(route, 'delete', handler);
     }
+    /** 엔드포인트 핸들러 추가 */
     all(route, handler) {
-        this.registerRequestHandler(route, handler, 'all');
+        this.endpointHandlerManager.set(route, 'all', handler);
     }
     /**
      * HTTP 요청 핸들러. Node http 모듈, Express 등에서 사용 가능.
@@ -107,7 +116,7 @@ export class XvelteApp {
         if (handler) {
             return { handler, params, isPageHandler: true };
         }
-        c = this.getRequestHandler(path);
+        c = this.getEndpointHandler(path);
         handler = c.handler;
         params = c.params;
         if (handler) {
@@ -147,40 +156,20 @@ export class XvelteApp {
      * @param path
      * @returns
      */
-    getRequestHandler(path) {
-        let handler = null;
-        let params = {};
-        handler = this.requestHandlerMap.get(path) ?? null;
-        if (handler)
-            return { handler, params };
-        for (const [pattern, handler_] of this.requestPatternHandlerMap.entries()) {
-            if (typeof (pattern) === "function") {
-                const matched = pattern(path);
-                if (matched) {
-                    params = matched.params;
-                    handler = handler_;
-                }
-            }
-            else {
-                if (pattern.test(path)) {
-                    handler = handler_;
-                }
-            }
-        }
-        return { handler, params };
+    getEndpointHandler(path) {
+        return this.endpointHandlerManager.getSingleTypeHandler(path);
     }
     /**
      * `XvelteResponse`를 전송합니다. 전송이 완료되면 true, 그렇지 않으면 false를 반환합니다.
      * false를 반환할 경우 handle 메소드에서 다음 단계로 넘어갑니다.
      */
-    async sendResponse(event_, response, res) {
+    async sendResponse(event, response, res) {
         if (response === false) {
             return false;
         }
-        const event = event_;
         res.writeHead(event.status, {
-            ...event.responseHeader,
-            'set-cookie': Object.values(event.responseCookie)
+            ...RequestEvent.getResponseHeader(event),
+            'set-cookie': Object.values(RequestEvent.getResponseCookie(event))
         });
         if (response instanceof ArrayBuffer) {
             res.end(Buffer.from(response));
@@ -372,47 +361,6 @@ export class XvelteApp {
         const renderedData = this.renderPage(renderingData);
         return JSON.stringify(renderedData);
     }
-    registerRequestHandler(route, handler, method) {
-        if (typeof (route) === "string") {
-            const route_ = pathify(route);
-            const pathRegexp = pathToRegexp.pathToRegexp(route_);
-            if (pathRegexp.keys.length === 0) {
-                const formerHandler = this.requestHandlerMap.get(route_);
-                this.requestHandlerMap.set(route_, generateNewHandler(formerHandler));
-            }
-            else {
-                const formerHandler = this.requestPatternHandlerMap.get(pathToRegexp.match(route_));
-                this.requestPatternHandlerMap.set(pathToRegexp.match(route_), generateNewHandler(formerHandler));
-            }
-        }
-        else {
-            const formerHandler = this.requestPatternHandlerMap.get(route);
-            this.requestPatternHandlerMap.set(route, generateNewHandler(formerHandler));
-        }
-        function generateNewHandler(formerHandler) {
-            if (method === "all") {
-                return async (event) => {
-                    if (formerHandler) {
-                        const r = await formerHandler(event);
-                        if (r !== false)
-                            return r;
-                    }
-                    return await handler(event);
-                };
-            }
-            else {
-                return async (event) => {
-                    if (event.method === method) {
-                        return await handler(event);
-                    }
-                    if (formerHandler) {
-                        return await formerHandler(event);
-                    }
-                    return false;
-                };
-            }
-        }
-    }
 }
 (function (XvelteApp) {
     XvelteApp.css = `xvelte-body, xvelte-island, xvelte-frag{display:contents;}`;
@@ -501,8 +449,11 @@ export class RequestEvent {
     async buffer() {
         return await this.requestData;
     }
-    form() {
-        return new Promise(async (resolve, reject) => {
+    async form() {
+        return await new Promise(async (resolve, reject) => {
+            if (!("content-type" in this.requestHeaders)) {
+                return reject('Missing Content-Type header.');
+            }
             const busboy = Busboy({ headers: this.requestHeaders });
             const fields = {};
             const files = {};
@@ -532,7 +483,88 @@ export class RequestEvent {
         event.params = params;
     }
     RequestEvent.setParams = setParams;
+    function getResponseHeader(event) {
+        //@ts-expect-error
+        return event.responseHeader;
+    }
+    RequestEvent.getResponseHeader = getResponseHeader;
+    function getResponseCookie(event) {
+        //@ts-expect-error
+        return event.responseCookie;
+    }
+    RequestEvent.getResponseCookie = getResponseCookie;
 })(RequestEvent || (RequestEvent = {}));
+class EndpointHandlerManager {
+    map = new Map();
+    patternMap = new Map();
+    set(route, method, handler) {
+        method = method.toLowerCase();
+        let handlerObject;
+        if (typeof (route) === "string") {
+            const route_ = pathify(route);
+            const pathRegexp = pathToRegexp.pathToRegexp(route_);
+            if (pathRegexp.keys.length === 0) { // 절대 경로
+                handlerObject = this.map.get(route_);
+                if (!handlerObject) {
+                    handlerObject = {};
+                    this.map.set(route_, handlerObject);
+                }
+            }
+            else {
+                const pattern = pathToRegexp.match(route_);
+                handlerObject = this.patternMap.get(pattern);
+                if (!handlerObject) {
+                    handlerObject = {};
+                    this.patternMap.set(pattern, handlerObject);
+                }
+            }
+        }
+        else {
+            handlerObject = this.patternMap.get(route);
+            if (!handlerObject) {
+                handlerObject = {};
+                this.patternMap.set(route, handlerObject);
+            }
+        }
+        handlerObject[method] = handler;
+    }
+    getSingleTypeHandler(path) {
+        let handlerObject = this.map.get(path);
+        let params = {};
+        if (!handlerObject) {
+            for (const [pattern, handlerObject_] of this.patternMap.entries()) {
+                if (typeof (pattern) === "function") {
+                    const matched = pattern(path);
+                    if (matched) {
+                        params = matched.params;
+                        handlerObject = handlerObject_;
+                    }
+                }
+                else {
+                    if (pattern.test(path)) {
+                        handlerObject = handlerObject_;
+                    }
+                }
+            }
+        }
+        return {
+            handler: handlerObject ? ((event) => {
+                for (const method of Object.keys(handlerObject)) {
+                    if (method === "all")
+                        continue;
+                    if (method === event.method) {
+                        return handlerObject[method](event);
+                    }
+                }
+                if ("all" in handlerObject) {
+                    return handlerObject.all(event);
+                }
+                return false;
+            }) : null,
+            params
+        };
+    }
+}
 function pathify(path_) {
     return new URL(path_, 'http://void').pathname;
 }

@@ -7,7 +7,7 @@ import path from "node:path";
 import mime from 'mime-types'
 import pathToRegexp from "path-to-regexp";
 import cookie from 'cookie';
-import type { PageHandler, IncomingMessage, PageHandleData, RequestHandler, AnyPageHandler, AnyRequestHandler, RouteParams, XvelteResponse, AnyRequestEvent } from "./types.js";
+import type { PageHandler, IncomingMessage, PageHandleData, EndpointHandler, AnyPageHandler, AnyEndpointHandler, RouteParams, XvelteResponse, AnyRequestEvent, RequestMethod } from "./types.js";
 import { hash } from "node:crypto";
 import type { RenderingData } from "../types.js";
 import * as devalue from 'devalue';
@@ -23,8 +23,7 @@ export class XvelteApp {
     private pageHandlerMap = new Map<string, AnyPageHandler>();
     private pagePatternHandlerMap = new Map<pathToRegexp.MatchFunction<pathToRegexp.ParamData> | RegExp, AnyPageHandler>();
 
-    private requestHandlerMap = new Map<string, AnyRequestHandler>();
-    private requestPatternHandlerMap = new Map<pathToRegexp.MatchFunction<pathToRegexp.ParamData> | RegExp, AnyRequestHandler>();
+    private endpointHandlerManager = new EndpointHandlerManager();
 
     private componentIdMap = new ComponentIdMap();
 
@@ -32,6 +31,11 @@ export class XvelteApp {
         this.template = template;
     }
 
+    /**
+     * 페이지 핸들러 추가
+     * @param route 
+     * @param handler 
+     */
     page<Route extends string | RegExp, Props extends Record<string, any>, LayoutProps extends Record<string, any>[]>(route: Route, handler: PageHandler<Route, Props, LayoutProps>) {
         if (typeof (route) === "string") {
             const route_ = pathify(route)
@@ -49,20 +53,25 @@ export class XvelteApp {
         }
     }
 
-    get<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>) {
-        this.registerRequestHandler(route, handler, 'get');
+    /** Get 엔드포인트 핸들러 추가 */
+    get<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>) {
+        this.endpointHandlerManager.set(route, 'get', handler);
     }
-    post<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>) {
-        this.registerRequestHandler(route, handler, 'post');
+    /** Post 엔드포인트 핸들러 추가 */
+    post<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>) {
+        this.endpointHandlerManager.set(route, 'post', handler);
     }
-    put<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>) {
-        this.registerRequestHandler(route, handler, 'put');
+    /** Put 엔드포인트 핸들러 추가 */
+    put<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>) {
+        this.endpointHandlerManager.set(route, 'put', handler);
     }
-    delete<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>) {
-        this.registerRequestHandler(route, handler, 'delete');
+    /** Delete 엔드포인트 핸들러 추가 */
+    delete<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>) {
+        this.endpointHandlerManager.set(route, 'delete', handler);
     }
-    all<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>) {
-        this.registerRequestHandler(route, handler, 'all');
+    /** 엔드포인트 핸들러 추가 */
+    all<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>) {
+        this.endpointHandlerManager.set(route, 'all', handler);
     }
 
     /**
@@ -115,21 +124,21 @@ export class XvelteApp {
      * @returns 
      */
     private getHandler(path: string) {
-        let handler: AnyPageHandler | AnyRequestHandler | null = null;
+        let handler: AnyPageHandler | AnyEndpointHandler | null = null;
         let params: Record<string, string> = {};
 
-        let c: { handler: AnyPageHandler | AnyRequestHandler | null, params: Record<string, string> } = this.getPageHandler(path);
+        let c: { handler: AnyPageHandler | AnyEndpointHandler | null, params: Record<string, string> } = this.getPageHandler(path);
         handler = c.handler;
         params = c.params;
         if (handler) {
             return { handler, params, isPageHandler: true } as { handler: AnyPageHandler, params: Record<string, string>, isPageHandler: true };
         }
 
-        c = this.getRequestHandler(path);
+        c = this.getEndpointHandler(path);
         handler = c.handler;
         params = c.params;
         if (handler) {
-            return { handler, params, isPageHandler: false } as { handler: AnyRequestHandler, params: Record<string, string>, isPageHandler: false };
+            return { handler, params, isPageHandler: false } as { handler: AnyEndpointHandler, params: Record<string, string>, isPageHandler: false };
         }
 
         return { handler, params, isPageHandler: false } as { handler: null, params: Record<string, string>, isPageHandler: false };
@@ -169,42 +178,22 @@ export class XvelteApp {
      * @param path 
      * @returns 
      */
-    private getRequestHandler(path: string) {
-        let handler: AnyPageHandler | AnyRequestHandler | null = null;
-        let params: Record<string, any> = {};
-        handler = this.requestHandlerMap.get(path) ?? null;
-        if (handler) return { handler, params };
-
-        for (const [pattern, handler_] of this.requestPatternHandlerMap.entries()) {
-            if (typeof (pattern) === "function") {
-                const matched = pattern(path);
-                if (matched) {
-                    params = matched.params;
-                    handler = handler_;
-                }
-            }
-            else {
-                if (pattern.test(path)) {
-                    handler = handler_;
-                }
-            }
-        }
-        return { handler, params }
+    private getEndpointHandler(path: string) {
+        return this.endpointHandlerManager.getSingleTypeHandler(path)
     }
 
     /**
      * `XvelteResponse`를 전송합니다. 전송이 완료되면 true, 그렇지 않으면 false를 반환합니다.
      * false를 반환할 경우 handle 메소드에서 다음 단계로 넘어갑니다.
      */
-    private async sendResponse(event_: AnyRequestEvent, response: XvelteResponse, res: ServerResponse) {
+    private async sendResponse(event: AnyRequestEvent, response: XvelteResponse, res: ServerResponse) {
         if (response === false) {
             return false;
         }
 
-        const event = event_ as unknown as NotPrivateRequestEvent<any>;
         res.writeHead(event.status, {
-            ...event.responseHeader,
-            'set-cookie': Object.values(event.responseCookie)
+            ...RequestEvent.getResponseHeader(event),
+            'set-cookie': Object.values(RequestEvent.getResponseCookie(event))
         });
 
         if (response instanceof ArrayBuffer) {
@@ -412,52 +401,6 @@ export class XvelteApp {
         const renderedData = this.renderPage(renderingData);
         return JSON.stringify(renderedData);
     }
-
-    private registerRequestHandler<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>, method: string) {
-        if (typeof (route) === "string") {
-            const route_ = pathify(route);
-
-            const pathRegexp = pathToRegexp.pathToRegexp(route_);
-            if (pathRegexp.keys.length === 0) {
-                const formerHandler = this.requestHandlerMap.get(route_);
-                this.requestHandlerMap.set(route_, generateNewHandler(formerHandler));
-            }
-            else {
-                const formerHandler = this.requestPatternHandlerMap.get(pathToRegexp.match(route_));
-                this.requestPatternHandlerMap.set(pathToRegexp.match(route_), generateNewHandler(formerHandler));
-            }
-        }
-        else {
-            const formerHandler = this.requestPatternHandlerMap.get(route);
-            this.requestPatternHandlerMap.set(route, generateNewHandler(formerHandler));
-        }
-
-        function generateNewHandler(formerHandler: AnyRequestHandler | undefined): RequestHandler<Route> {
-            if (method === "all") {
-                return async (event: AnyRequestEvent) => {
-                    if (formerHandler) {
-                        const r = await formerHandler(event);
-                        if (r !== false) return r;
-                    }
-
-                    return await handler(event);
-                }
-            }
-            else {
-                return async (event: AnyRequestEvent) => {
-                    if (event.method === method) {
-                        return await handler(event);
-                    }
-
-                    if (formerHandler) {
-                        return await formerHandler(event);
-                    }
-
-                    return false;
-                }
-            }
-        }
-    }
 }
 
 export namespace XvelteApp {
@@ -489,17 +432,6 @@ class ComponentIdMap {
     }
 }
 
-interface NotPrivateRequestEvent<Route extends string | RegExp> {
-    url: URL;
-    params: Route extends string ? RouteParams<Route> : Record<string, string>;
-    requestHeaders: Record<string, string>;
-    locals: Record<string, any>;
-    request: IncomingMessage;
-    requestCookie: Record<string, string | undefined>;
-    responseHeader: Record<string, string>;
-    status: number;
-    responseCookie: Record<string, string>;
-}
 export class RequestEvent<Route extends string | RegExp> {
     url: URL;
     //@ts-expect-error
@@ -570,8 +502,11 @@ export class RequestEvent<Route extends string | RegExp> {
     async buffer() {
         return await this.requestData;
     }
-    form() {
-        return new Promise<{ fields: Record<string, string>, files: Record<string, { filename: string; mimeType: string; buffer: Buffer; }> }>(async (resolve, reject) => {
+    async form() {
+        return await new Promise<{ fields: Record<string, string>, files: Record<string, { filename: string; mimeType: string; buffer: Buffer; }> }>(async (resolve, reject) => {
+            if(!("content-type" in this.requestHeaders)){
+                return reject('Missing Content-Type header.');
+            }
             const busboy = Busboy({ headers: this.requestHeaders });
             const fields: Record<string, string> = {};
             const files: Record<string, { filename: string; mimeType: string; buffer: Buffer; }> = {};
@@ -603,6 +538,91 @@ export class RequestEvent<Route extends string | RegExp> {
 export namespace RequestEvent {
     export function setParams(event: AnyRequestEvent, params: Record<string, string>) {
         event.params = params
+    }
+    export function getResponseHeader(event: AnyRequestEvent) {
+        //@ts-expect-error
+        return event.responseHeader;
+    }
+    export function getResponseCookie(event: AnyRequestEvent) {
+        //@ts-expect-error
+        return event.responseCookie;
+    }
+}
+
+class EndpointHandlerManager {
+    map = new Map<string, Record<string, AnyEndpointHandler>>();
+    patternMap = new Map<pathToRegexp.MatchFunction<pathToRegexp.ParamData> | RegExp, Record<string, AnyEndpointHandler>>();
+
+    set<Route extends string | RegExp>(route: Route, method: RequestMethod, handler: AnyEndpointHandler) {
+        method = method.toLowerCase();
+        let handlerObject;
+        if (typeof (route) === "string") {
+            const route_ = pathify(route);
+
+            const pathRegexp = pathToRegexp.pathToRegexp(route_);
+            if (pathRegexp.keys.length === 0) { // 절대 경로
+                handlerObject = this.map.get(route_);
+                if (!handlerObject) {
+                    handlerObject = {};
+                    this.map.set(route_, handlerObject);
+                }
+            }
+            else {
+                const pattern = pathToRegexp.match(route_);
+                handlerObject = this.patternMap.get(pattern);
+                if (!handlerObject) {
+                    handlerObject = {};
+                    this.patternMap.set(pattern, handlerObject);
+                }
+            }
+        }
+        else {
+            handlerObject = this.patternMap.get(route);
+            if (!handlerObject) {
+                handlerObject = {};
+                this.patternMap.set(route, handlerObject);
+            }
+        }
+        handlerObject[method] = handler;
+    }
+
+    getSingleTypeHandler(path: string) {
+        let handlerObject = this.map.get(path);
+        let params = {};
+        if (!handlerObject) {
+            for (const [pattern, handlerObject_] of this.patternMap.entries()) {
+                if (typeof (pattern) === "function") {
+                    const matched = pattern(path);
+                    if (matched) {
+                        params = matched.params;
+                        handlerObject = handlerObject_;
+                    }
+                }
+                else {
+                    if (pattern.test(path)) {
+                        handlerObject = handlerObject_;
+                    }
+                }
+            }
+        }
+
+        return {
+            handler: handlerObject ? ((event) => {
+                for (const method of Object.keys(handlerObject)) {
+                    if (method === "all") continue;
+                    if (method === event.method) {
+                        return handlerObject[method](event);
+                    }
+                }
+
+                if ("all" in handlerObject) {
+                    return handlerObject.all(event);
+                }
+
+                return false;
+            }) as AnyEndpointHandler : null,
+            params
+        }
     }
 }
 

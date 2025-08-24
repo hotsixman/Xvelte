@@ -3,8 +3,8 @@ import type { IncomingMessage as IncomingMessage_ } from "node:http";
 import type { RequestEvent } from './XvelteApp.js';
 import type { ReadStream } from "node:fs";
 
-export type RequestHandler<Route extends string | RegExp> = (event: RequestEvent<Route>) => MaybePromise<XvelteResponse | null>;
-export type AnyRequestHandler = RequestHandler<any>;
+export type EndpointHandler<Route extends string | RegExp> = (event: RequestEvent<Route>) => MaybePromise<XvelteResponse | null>;
+export type AnyEndpointHandler = EndpointHandler<any>;
 
 export type AnyRequestEvent = RequestEvent<any>;
 
@@ -17,7 +17,9 @@ export type PageHandleData<Props extends Record<string, any>, LayoutProps extend
         } & ({} extends LayoutProps[Key] ? { props?: LayoutProps[Key] } : { props: LayoutProps[Key] })
     },
     component: Component<Props>,
-} & ({} extends Props ? { props?: Props } : { props: Props })
+} & ({} extends Props ? { props?: Props } : { props: Props });
+
+export type RequestMethod = 'get' | 'post' | 'put' | 'delete' | 'all' | (string & {});
 
 export type XvelteResponse =
     | ArrayBuffer

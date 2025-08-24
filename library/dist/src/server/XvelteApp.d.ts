@@ -1,20 +1,29 @@
 import { type ServerResponse } from "node:http";
 import cookie from 'cookie';
-import type { PageHandler, IncomingMessage, RequestHandler, RouteParams, AnyRequestEvent } from "./types.js";
+import type { PageHandler, IncomingMessage, EndpointHandler, RouteParams, AnyRequestEvent } from "./types.js";
 export declare class XvelteApp {
     private template;
     private pageHandlerMap;
     private pagePatternHandlerMap;
-    private requestHandlerMap;
-    private requestPatternHandlerMap;
+    private endpointHandlerManager;
     private componentIdMap;
     constructor(template: string);
+    /**
+     * 페이지 핸들러 추가
+     * @param route
+     * @param handler
+     */
     page<Route extends string | RegExp, Props extends Record<string, any>, LayoutProps extends Record<string, any>[]>(route: Route, handler: PageHandler<Route, Props, LayoutProps>): void;
-    get<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>): void;
-    post<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>): void;
-    put<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>): void;
-    delete<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>): void;
-    all<Route extends string | RegExp>(route: Route, handler: RequestHandler<Route>): void;
+    /** Get 엔드포인트 핸들러 추가 */
+    get<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>): void;
+    /** Post 엔드포인트 핸들러 추가 */
+    post<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>): void;
+    /** Put 엔드포인트 핸들러 추가 */
+    put<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>): void;
+    /** Delete 엔드포인트 핸들러 추가 */
+    delete<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>): void;
+    /** 엔드포인트 핸들러 추가 */
+    all<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>): void;
     /**
      * HTTP 요청 핸들러. Node http 모듈, Express 등에서 사용 가능.
      * @param req
@@ -40,7 +49,7 @@ export declare class XvelteApp {
      * @param path
      * @returns
      */
-    private getRequestHandler;
+    private getEndpointHandler;
     /**
      * `XvelteResponse`를 전송합니다. 전송이 완료되면 true, 그렇지 않으면 false를 반환합니다.
      * false를 반환할 경우 handle 메소드에서 다음 단계로 넘어갑니다.
@@ -64,7 +73,6 @@ export declare class XvelteApp {
      * @returns
      */
     private getNavigationResponse;
-    private registerRequestHandler;
 }
 export declare namespace XvelteApp {
     const css = "xvelte-body, xvelte-island, xvelte-frag{display:contents;}";
@@ -109,4 +117,6 @@ export declare class RequestEvent<Route extends string | RegExp> {
 }
 export declare namespace RequestEvent {
     function setParams(event: AnyRequestEvent, params: Record<string, string>): void;
+    function getResponseHeader(event: AnyRequestEvent): Record<string, string | number | string[]>;
+    function getResponseCookie(event: AnyRequestEvent): Record<string, string>;
 }
