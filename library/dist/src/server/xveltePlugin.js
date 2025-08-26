@@ -42,7 +42,7 @@ export default function xveltePlugin() {
                                     }
                                 },
                             },
-                            external: ['express', 'svelte/server', /^node\:/, 'mime-types'],
+                            external: [/^node\:/, '@hotsixman/xvelte'],
                             preserveEntrySignatures: 'strict'
                         },
                         outDir: 'build',
@@ -102,7 +102,7 @@ export default function xveltePlugin() {
                     else {
                         const app = await server.ssrLoadModule(path.resolve(process.cwd(), 'src/app')).then((module) => module.default);
                         if (devFileChanged && clientSvelteFilePaths.size > 0) {
-                            await buildClientComponents(path.resolve(process.cwd(), '.xvelte'));
+                            await buildClientComponents(path.resolve(process.cwd(), '__xvelte__'));
                         }
                         return await app.handle(req, res);
                     }

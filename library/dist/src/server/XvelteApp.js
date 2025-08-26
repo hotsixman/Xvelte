@@ -220,7 +220,7 @@ export class XvelteApp {
     */
     async getXvelteClientFileResponse(event) {
         if (event.url.pathname.startsWith('/__xvelte__/client')) {
-            const filePath = process.env.isDev ? path.join(process.cwd(), '.xvelte', event.url.pathname.replace(/\/__xvelte__\//, '')) : path.join(import.meta.dirname, event.url.pathname);
+            const filePath = process.env.isDev ? path.join(process.cwd(), '__xvelte__', event.url.pathname.replace(/\/__xvelte__\//, '')) : path.join(import.meta.dirname, event.url.pathname);
             if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
                 event.status = 404;
                 return null;
