@@ -9,8 +9,8 @@ import cookie from 'cookie';
 import { hash } from "node:crypto";
 import * as devalue from 'devalue';
 import Busboy from 'busboy';
-if (typeof (process.env.isDev) === "undefined") {
-    process.env.isDev = false;
+if (typeof (process.env.prod) === "undefined") {
+    process.env.prod = "true";
 }
 export class XvelteApp {
     template;
@@ -60,6 +60,10 @@ export class XvelteApp {
     /** 엔드포인트 핸들러 추가 */
     all(route, handler) {
         this.endpointHandlerManager.set(route, 'all', handler);
+    }
+    get handler() {
+        const THIS = this;
+        return THIS.handle.bind(THIS);
     }
     /**
      * HTTP 요청 핸들러. Node http 모듈, Express 등에서 사용 가능.
@@ -220,7 +224,7 @@ export class XvelteApp {
     */
     async getXvelteClientFileResponse(event) {
         if (event.url.pathname.startsWith('/__xvelte__/client')) {
-            const filePath = process.env.isDev ? path.join(process.cwd(), '__xvelte__', event.url.pathname.replace(/\/__xvelte__\//, '')) : path.join(import.meta.dirname, event.url.pathname);
+            const filePath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), event.url.pathname);
             if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
                 event.status = 404;
                 return null;

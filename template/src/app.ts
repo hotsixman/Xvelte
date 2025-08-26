@@ -29,6 +29,6 @@ app.page('/about', () => {
 
 export default app;
 
-if (!process.env.isDev) {
+if (process.env.prod) {
     app.listen(3000, () => console.log('listening on 3000'));
 }

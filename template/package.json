@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "@hotsixman/xvelte": "0.5.0"
+    "@hotsixman/xvelte": "0.5.2"
   },
   "scripts": {
     "dev": "vite dev",

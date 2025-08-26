@@ -24,13 +24,14 @@ export declare class XvelteApp {
     delete<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>): void;
     /** 엔드포인트 핸들러 추가 */
     all<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>): void;
+    get handler(): (req: IncomingMessage, res: ServerResponse) => Promise<ServerResponse<import("http").IncomingMessage> | undefined>;
     /**
      * HTTP 요청 핸들러. Node http 모듈, Express 등에서 사용 가능.
      * @param req
      * @param res
      * @returns
      */
-    handle(req: IncomingMessage, res: ServerResponse): Promise<ServerResponse<import("http").IncomingMessage> | undefined>;
+    private handle;
     listen(port: number, callback?: (error?: Error) => any): void;
     /**
      * 특정 경로에 해당하는 핸들러, url 파라미터, 페이지 핸들러 여부를 반환

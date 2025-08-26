@@ -30,7 +30,7 @@ app.get('/test', async (event) => {
     return null;
 })
 
-export default app;
+export default app.handler;
 
 if (!process.env.isDev) {
     app.listen(3000, () => console.log('listening on 3000'));

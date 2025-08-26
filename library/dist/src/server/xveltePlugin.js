@@ -20,11 +20,15 @@ export default function xveltePlugin() {
         enforce: 'pre',
         async config(config, { command }) {
             isDev = command === "serve";
-            process.env.isDev = isDev;
+            if (isDev) {
+                process.env.dev = "true";
+                delete process.env.prod;
+            }
             if (!isDev) {
                 return {
                     ...config,
                     build: {
+                        ssr: fs.existsSync('src/app.js') ? 'src/app.js' : 'src/app.ts',
                         rollupOptions: {
                             input: fs.existsSync('src/app.js') ? 'src/app.js' : 'src/app.ts',
                             output: {
@@ -100,11 +104,11 @@ export default function xveltePlugin() {
                         return next();
                     }
                     else {
-                        const app = await server.ssrLoadModule(path.resolve(process.cwd(), 'src/app')).then((module) => module.default);
+                        const handler = await server.ssrLoadModule(path.resolve(process.cwd(), 'src/app')).then((module) => module.default);
                         if (devFileChanged && clientSvelteFilePaths.size > 0) {
                             await buildClientComponents(path.resolve(process.cwd(), '__xvelte__'));
                         }
-                        return await app.handle(req, res);
+                        return await handler(req, res);
                     }
                 }
                 catch (err) {

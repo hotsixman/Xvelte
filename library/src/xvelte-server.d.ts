@@ -1,5 +1,6 @@
 declare namespace NodeJS {
     interface ProcessEnv {
-        isDev: boolean;
+        dev?: "true";
+        prod?: "true";
     }
 }

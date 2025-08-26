@@ -13,8 +13,8 @@ import type { RenderingData } from "../types.js";
 import * as devalue from 'devalue';
 import Busboy from 'busboy';
 
-if (typeof (process.env.isDev) === "undefined") {
-    process.env.isDev = false;
+if (typeof (process.env.prod) === "undefined") {
+    process.env.prod = "true";
 }
 
 export class XvelteApp {
@@ -74,13 +74,18 @@ export class XvelteApp {
         this.endpointHandlerManager.set(route, 'all', handler);
     }
 
+    get handler(){
+        const THIS = this;
+        return THIS.handle.bind(THIS);
+    }
+
     /**
      * HTTP 요청 핸들러. Node http 모듈, Express 등에서 사용 가능.
      * @param req 
      * @param res 
      * @returns 
      */
-    async handle(req: IncomingMessage, res: ServerResponse) {
+    private async handle(req: IncomingMessage, res: ServerResponse) {
         try {
             const event = new RequestEvent(req, res);
             if (await this.sendResponse(event, await this.getXvelteClientFileResponse(event), res)) return;
@@ -247,7 +252,7 @@ export class XvelteApp {
     */
     private async getXvelteClientFileResponse(event: AnyRequestEvent): Promise<XvelteResponse> {
         if (event.url.pathname.startsWith('/__xvelte__/client')) {
-            const filePath = path.join(process.cwd(), event.url.pathname);
+            const filePath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), event.url.pathname);
             if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
                 event.status = 404;
                 return null;
