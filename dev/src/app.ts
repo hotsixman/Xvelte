@@ -32,6 +32,6 @@ app.get('/test', async (event) => {
 
 export default app.handler;
 
-if (!process.env.isDev) {
+if (process.env.prod) {
     app.listen(3000, () => console.log('listening on 3000'));
 }

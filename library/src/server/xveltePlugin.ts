@@ -2,7 +2,7 @@ import type { Plugin } from "vite";
 import path from 'node:path';
 import { compile, compileModule } from "svelte/compiler";
 import { createHash } from "node:crypto";
-import { build, type Plugin as EsbuildPlugin } from "esbuild";
+import { build, type Plugin as EsbuildPlugin, type Loader } from "esbuild";
 import fs, { read } from "node:fs";
 import { XvelteApp } from "./XvelteApp.js";
 
@@ -24,7 +24,7 @@ export default function xveltePlugin(): Plugin {
         enforce: 'pre',
         async config(config, { command }) {
             isDev = command === "serve";
-            if(isDev){
+            if (isDev) {
                 process.env.dev = "true"
                 delete process.env.prod;
             }
@@ -59,11 +59,6 @@ export default function xveltePlugin(): Plugin {
                 }
             }
         },
-        watchChange(id, change) {
-            if (clientSvelteFilePaths.has(id) && change.event === 'delete') {
-                clientSvelteFilePaths.delete(id);
-            }
-        },
         async resolveId(id) {
             if (id.startsWith('/__xvelte__/client')) {
                 return {
@@ -86,7 +81,12 @@ export default function xveltePlugin(): Plugin {
             }
             else if (id.endsWith('.svelte?client')) {
                 const realId = id.replace(/\?client$/, '');
-                clientSvelteFilePaths.add(realId);
+                if (isDev) {
+                    await buildSingleClientComponent(code, realId);
+                }
+                else {
+                    clientSvelteFilePaths.add(realId);
+                }
                 return `const path = "/__xvelte__/client/${generateHash(realId)}.js"; export default path;`
             }
             if (id.endsWith('.svelte.js')) {
@@ -103,6 +103,7 @@ export default function xveltePlugin(): Plugin {
             await buildClientComponents(path.resolve(path.join(options.dir || '', '__xvelte__')));
         },
         async configureServer(server) {
+            await buildXvelteClientScripts();
             server.middlewares.use(async (req, res, next) => {
                 try {
                     if (req.url?.startsWith('/@vite') || req.url?.startsWith('/node_modules') || req.url?.startsWith('/.well-known')) {
@@ -111,7 +112,7 @@ export default function xveltePlugin(): Plugin {
                     else {
                         const handler = await server.ssrLoadModule(path.resolve(process.cwd(), 'src/app')).then((module) => module.default as XvelteApp['handler']);
                         if (devFileChanged && clientSvelteFilePaths.size > 0) {
-                            await buildClientComponents(path.resolve(process.cwd(), '__xvelte__'));
+                            //await buildClientComponents(path.resolve(process.cwd(), '__xvelte__'));
                         }
                         return await handler(req as any, res);
                     }
@@ -134,6 +135,10 @@ export default function xveltePlugin(): Plugin {
         }
     }
 
+    /**
+     * production build에서 사용
+     * @param dir 
+     */
     async function buildClientComponents(dir: string) {
         const { default: esbuildSvelte } = await import('esbuild-svelte') as unknown as { default: (...args: any[]) => EsbuildPlugin };
         let xvelteClientScriptPath = path.resolve(import.meta.dirname, '..', 'client', 'xvelte.ts');
@@ -178,22 +183,83 @@ export default function xveltePlugin(): Plugin {
                     }
                 }
             ],
-            loader: {
-                '.png': 'dataurl',
-                '.jpg': 'dataurl',
-                '.jpeg': 'dataurl',
-                '.gif': 'dataurl',
-                '.webp': 'dataurl',
-                '.avif': 'dataurl',
-                '.ico': 'dataurl',
-                '.ttf': 'dataurl',
-                '.woff': 'dataurl',
-                '.woff2': 'dataurl',
-                '.eot': 'dataurl',
-                '.svg': 'dataurl'
-            }
+            loader: viteLoader()
         });
         devFileChanged = false;
+    }
+
+    /**
+     * dev 에서 사용
+     */
+    async function buildXvelteClientScripts() {
+        let xvelteClientScriptPath = path.resolve(import.meta.dirname, '..', 'client', 'xvelte.ts');
+        let svelteInternalClientScriptPath = path.resolve(import.meta.dirname, '..', 'client', 'svelteInternalClient.ts');
+        if (!fs.existsSync(xvelteClientScriptPath)) {
+            xvelteClientScriptPath = path.resolve(import.meta.dirname, '..', 'client', 'xvelte.js');
+            xvelteClientScriptPath = path.resolve(import.meta.dirname, '..', 'client', 'svelteInternalClient.js');
+        }
+        const entryPoints: Record<string, string> = {
+            [path.resolve(process.cwd(), '__xvelte__', 'client', 'xvelte')]: xvelteClientScriptPath,
+            [path.resolve(process.cwd(), '__xvelte__', 'client', 'svelteInternalClient')]: svelteInternalClientScriptPath,
+        };
+        await build({
+            format: 'esm' as const,
+            platform: 'browser' as const,
+            bundle: true,
+            splitting: true,
+            entryPoints,
+            outdir: path.resolve(process.cwd(), '__xvelte__', 'client')
+        });
+    }
+
+    /**
+     * dev에서 사용
+     * @returns 
+     */
+    async function buildSingleClientComponent(code: string, id: string) {
+        const compiled = compile(code, { generate: 'client', css: 'injected', name: generateHash(id) });
+        await build({
+            stdin: {
+                contents: compiled.js.code,
+                resolveDir: path.dirname(id),
+                sourcefile: id,
+                loader: 'js'
+            },
+            outfile: path.resolve(process.cwd(), '__xvelte__', 'client', `${generateHash(id)}.js`),
+            format: 'esm' as const,
+            platform: 'browser' as const,
+            bundle: true,
+            plugins: [{
+                name: 'change-import',
+                setup(build) {
+                    build.onResolve({ filter: /svelte\/internal\/client/ }, () => {
+                        return {
+                            path: '/__xvelte__/client/svelteInternalClient.js',
+                            external: true
+                        }
+                    })
+                }
+            }],
+            loader: viteLoader()
+        });
+    }
+
+    function viteLoader(): Record<string, Loader> {
+        return {
+            '.png': 'dataurl',
+            '.jpg': 'dataurl',
+            '.jpeg': 'dataurl',
+            '.gif': 'dataurl',
+            '.webp': 'dataurl',
+            '.avif': 'dataurl',
+            '.ico': 'dataurl',
+            '.ttf': 'dataurl',
+            '.woff': 'dataurl',
+            '.woff2': 'dataurl',
+            '.eot': 'dataurl',
+            '.svg': 'dataurl',
+            '.css': 'css'
+        }
     }
 
     function viteLikeAssets(): EsbuildPlugin {
