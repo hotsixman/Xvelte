@@ -1,5 +1,6 @@
 <script lang="ts">
     import { getContext } from "svelte";
+    import './test.scss'
 
     interface Props {
         init?: number;
@@ -11,6 +12,9 @@
 </script>
 
 <button onclick={() => count++}>{count}</button>
+<div>
+    뭐욧
+</div>
 
 <style>
     button {

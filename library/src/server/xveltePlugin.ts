@@ -1,10 +1,11 @@
 import type { Plugin } from "vite";
 import path from 'node:path';
-import { compile, compileModule } from "svelte/compiler";
+import { compile, compileModule, preprocess, type Preprocessor } from "svelte/compiler";
 import { createHash } from "node:crypto";
-import { build, type Plugin as EsbuildPlugin, type Loader } from "esbuild";
+import { build, type Plugin as EsbuildPlugin, type Loader, type PluginBuild } from "esbuild";
 import fs, { read } from "node:fs";
 import { XvelteApp } from "./XvelteApp.js";
+import * as sass from 'sass';
 
 /**
  * @todo 개발서버 일 때, client 컴포넌트들을 별도의 폴더에 번들링하여 저장해놓기
@@ -179,11 +180,12 @@ export default function xveltePlugin(): Plugin {
                                     return { path: path.resolve(process.cwd(), 'node_modules', 'svelte', 'src', 'index-client.js') };
                                 }
                             }
-                        })
+                        });
+                        cssLoader(build);
                     }
                 }
             ],
-            loader: viteLoader()
+            loader: esbuildLoader()
         });
         devFileChanged = false;
     }
@@ -237,14 +239,15 @@ export default function xveltePlugin(): Plugin {
                             path: '/__xvelte__/client/svelteInternalClient.js',
                             external: true
                         }
-                    })
+                    });
+                    cssLoader(build);
                 }
             }],
-            loader: viteLoader()
+            loader: esbuildLoader()
         });
     }
 
-    function viteLoader(): Record<string, Loader> {
+    function esbuildLoader(): Record<string, Loader> {
         return {
             '.png': 'dataurl',
             '.jpg': 'dataurl',
@@ -257,9 +260,48 @@ export default function xveltePlugin(): Plugin {
             '.woff': 'dataurl',
             '.woff2': 'dataurl',
             '.eot': 'dataurl',
-            '.svg': 'dataurl',
-            '.css': 'css'
+            '.svg': 'dataurl'
         }
+    }
+
+    function cssLoader(build: PluginBuild) {
+        build.onLoad({ filter: /\.css$/ }, (args) => {
+            const css = fs.readFileSync(args.path, 'utf-8');
+            const contents = `
+                if (typeof document !== 'undefined') {
+                    const style = document.createElement('style');
+                    style.textContent = ${JSON.stringify(css)};
+                    document.head.appendChild(style);
+                }
+                `;
+            return { contents, loader: "js" };
+        });
+
+        build.onLoad({ filter: /\.scss$/ }, (args) => {
+            const scss = fs.readFileSync(args.path, 'utf-8');
+            const css = sass.compileString(scss, { style: "compressed" }).css;
+            const contents = `
+                if (typeof document !== 'undefined') {
+                    const style = document.createElement('style');
+                    style.textContent = ${JSON.stringify(css)};
+                    document.head.appendChild(style);
+                }
+                `;
+            return { contents, loader: "js" };
+        });
+
+        build.onLoad({ filter: /\.sass$/ }, (args) => {
+            const sassString = fs.readFileSync(args.path, 'utf-8');
+            const css = sass.compileString(sassString, { style: "compressed" }).css;
+            const contents = `
+                if (typeof document !== 'undefined') {
+                    const style = document.createElement('style');
+                    style.textContent = ${JSON.stringify(css)};
+                    document.head.appendChild(style);
+                }
+                `;
+            return { contents, loader: "js" };
+        });
     }
 
     function viteLikeAssets(): EsbuildPlugin {

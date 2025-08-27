@@ -3,6 +3,7 @@
         "@types/node": "^24.2.1"
     },
     "dependencies": {
+        "sass-embedded": "^1.91.0",
         "svelte": "^5.38.3",
         "vite": "^7.1.1"
     },
