@@ -1,6 +1,7 @@
 <script lang="ts">
     import Island from '@hotsixman/xvelte/components/Island.svelte'
     import Counter from './Counter.svelte?client';
+    import './test.scss'
 
     interface Props{
         currentTimeString: string;

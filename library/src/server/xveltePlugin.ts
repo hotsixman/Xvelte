@@ -198,7 +198,9 @@ export default function xveltePlugin(): Plugin {
         let svelteInternalClientScriptPath = path.resolve(import.meta.dirname, '..', 'client', 'svelteInternalClient.ts');
         if (!fs.existsSync(xvelteClientScriptPath)) {
             xvelteClientScriptPath = path.resolve(import.meta.dirname, '..', 'client', 'xvelte.js');
-            xvelteClientScriptPath = path.resolve(import.meta.dirname, '..', 'client', 'svelteInternalClient.js');
+        }
+        if (!fs.existsSync(svelteInternalClientScriptPath)) {
+            svelteInternalClientScriptPath = path.resolve(import.meta.dirname, '..', 'client', 'svelteInternalClient.js');
         }
         const entryPoints: Record<string, string> = {
             [path.resolve(process.cwd(), '__xvelte__', 'client', 'xvelte')]: xvelteClientScriptPath,

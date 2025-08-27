@@ -9,9 +9,6 @@ import cookie from 'cookie';
 import { hash } from "node:crypto";
 import * as devalue from 'devalue';
 import Busboy from 'busboy';
-if (typeof (process.env.prod) === "undefined") {
-    process.env.prod = "true";
-}
 export class XvelteApp {
     template;
     pageHandlerMap = new Map();
@@ -20,6 +17,13 @@ export class XvelteApp {
     componentIdMap = new ComponentIdMap();
     constructor(template) {
         this.template = template;
+        //@ts-expect-error
+        if (import.meta.env?.DEV) {
+            process.env.dev = "true";
+        }
+        else {
+            process.env.prod = "true";
+        }
     }
     /**
      * 페이지 핸들러 추가
@@ -288,7 +292,7 @@ export class XvelteApp {
         const xvelteHead = dom.querySelector('xvelte-head');
         if (xvelteHead) {
             const newXvelteHead = parseHtml('<!--xvelte-head-->', { comment: true });
-            if (process.env.isDev) {
+            if (process.env.dev) {
                 newXvelteHead.innerHTML += '<script type="module" src="/@vite/client"></script>';
             }
             newXvelteHead.innerHTML += `<style>${XvelteApp.css}</style>`;

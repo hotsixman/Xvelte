@@ -1,7 +1,6 @@
 <script>
     import Island from "../../../../library/src/components/Island.svelte";
     import Counter from "./counter.svelte?client";
-    import './test.scss'
 </script>
 
 <div>메인페이지</div>

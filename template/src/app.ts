@@ -3,7 +3,6 @@ import template from './app.html?raw';
 import MainLayout from "./layout/MainLayout.svelte";
 import IndexPage from "./page/index/Page.svelte";
 import AboutPage from "./page/about/Page.svelte";
-
 const app = new XvelteApp(template);
 
 app.page('/', () => {
@@ -27,8 +26,8 @@ app.page('/about', () => {
     }
 })
 
-export default app;
+export default app.handler;
 
-if (process.env.prod) {
-    app.listen(3000, () => console.log('listening on 3000'));
+if(import.meta.env.PROD){
+    app.listen(3000, () => console.log('listen on 3000'))
 }

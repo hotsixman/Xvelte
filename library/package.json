@@ -2,7 +2,7 @@
   "name": "@hotsixman/xvelte",
   "repository": "https://github.com/hotsixman/xvelte",
   "author": "hotsixman",
-  "version": "0.5.2",
+  "version": "0.6.2",
   "main": "./dist/index.js",
   "exports": {
     ".": "./dist/index.js",

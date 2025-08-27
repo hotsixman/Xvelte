@@ -1,7 +1,5 @@
 <script lang="ts">
     import { getContext } from "svelte";
-    import './test.scss'
-
     interface Props {
         init?: number;
     }

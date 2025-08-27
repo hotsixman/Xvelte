@@ -25,13 +25,6 @@ export class XvelteApp {
 
     constructor(template: string) {
         this.template = template;
-        //@ts-expect-error
-        if(import.meta.env.DEV){
-            process.env.dev = "true";
-        }
-        else{
-            process.env.prod = "true";
-        }
     }
 
     /**

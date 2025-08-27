@@ -1,7 +1,7 @@
 <script lang="ts">
     let count = $state(0);
 
-    function increase(){
+    function increase() {
         count++;
     }
 </script>
@@ -11,7 +11,7 @@
 </button>
 
 <style>
-    button{
+    button {
         padding-block: 10px;
         padding-inline: 10px;
 
@@ -24,11 +24,11 @@
 
         cursor: pointer;
 
-        &:hover{
+        &:hover {
             background-color: rgb(210, 210, 210);
         }
 
-        &:active{
+        &:active {
             background-color: rgb(228, 228, 228);
         }
     }
