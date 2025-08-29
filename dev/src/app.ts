@@ -3,7 +3,7 @@ import template from './app.html?raw';
 import Layout from "./page/layout.svelte";
 import IndexPage from "./page/index/page.svelte";
 import AboutPage from "./page/about/page.svelte";
-import fs from 'node:fs';
+import path from "node:path";
 
 const app = new XvelteApp(template);
 
@@ -28,6 +28,13 @@ app.get('/test', async (event) => {
     const formData = await event.form();
     console.log(formData);
     return null;
+});
+
+app.static(path.resolve(import.meta.dirname, '..', 'static'));
+
+app.hook((event) => {
+    console.log('pathname: ', event.url.pathname);
+    return event;
 })
 
 export default app.handler;
