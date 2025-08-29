@@ -34,3 +34,4 @@ export type IncomingMessage = IncomingMessage_ & {
     url: string;
 };
 export type MaybePromise<T> = T | Promise<T>;
+export type XvelteHook = (event: AnyRequestEvent) => MaybePromise<AnyRequestEvent | XvelteResponse>;

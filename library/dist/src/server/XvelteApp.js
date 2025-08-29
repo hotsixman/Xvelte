@@ -15,15 +15,10 @@ export class XvelteApp {
     pagePatternHandlerMap = new Map();
     endpointHandlerManager = new EndpointHandlerManager();
     componentIdMap = new ComponentIdMap();
+    staticPath;
+    hookFunction;
     constructor(template) {
         this.template = template;
-        //@ts-expect-error
-        if (import.meta.env?.DEV) {
-            process.env.dev = "true";
-        }
-        else {
-            process.env.prod = "true";
-        }
     }
     /**
      * 페이지 핸들러 추가
@@ -65,6 +60,19 @@ export class XvelteApp {
     all(route, handler) {
         this.endpointHandlerManager.set(route, 'all', handler);
     }
+    /**
+     * static 파일 경로 설정
+     * @param pathname
+     */
+    static(pathname) {
+        this.staticPath = pathname;
+    }
+    /**
+     * hook 설정
+     */
+    hook(xvelteHook) {
+        this.hookFunction = xvelteHook;
+    }
     get handler() {
         const THIS = this;
         return THIS.handle.bind(THIS);
@@ -77,7 +85,16 @@ export class XvelteApp {
      */
     async handle(req, res) {
         try {
-            const event = new RequestEvent(req, res);
+            let event = new RequestEvent(req, res);
+            if (this.hookFunction) {
+                const r = await this.hookFunction(event);
+                if (r instanceof RequestEvent) {
+                    event = r;
+                }
+                else {
+                    return await this.sendResponse(event, r, res);
+                }
+            }
             if (await this.sendResponse(event, await this.getXvelteClientFileResponse(event), res))
                 return;
             if (await this.sendResponse(event, await this.getNavigationResponse(event), res))
@@ -94,6 +111,17 @@ export class XvelteApp {
                 }
                 if (await this.sendResponse(event, response, res))
                     return;
+            }
+            if (this.staticPath) {
+                const filePath = path.join(this.staticPath, event.url.pathname);
+                if (fs.existsSync(filePath)) {
+                    const mimeType = mime.contentType(path.basename(filePath));
+                    if (mimeType) {
+                        event.setHeader('content-type', mimeType);
+                    }
+                    const fileStream = fs.createReadStream(filePath);
+                    return await this.sendResponse(event, fileStream, res);
+                }
             }
             res.statusCode = 404;
             return res.end('404 Error');
@@ -196,9 +224,6 @@ export class XvelteApp {
             return true;
         }
         if (response === null) {
-            if (!res.writableEnded) {
-                res.end();
-            }
             return true;
         }
         if (response instanceof ReadStream) {
@@ -227,7 +252,7 @@ export class XvelteApp {
     * 클라이언트 스크립트와 클라이언트 컴포넌트 파일 전송
     */
     async getXvelteClientFileResponse(event) {
-        if (event.url.pathname.startsWith('/__xvelte__/client')) {
+        if (event.url.pathname === '/__xvelte__/client' || event.url.pathname.startsWith('/__xvelte__/client/')) {
             const filePath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), event.url.pathname);
             if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
                 event.status = 404;

@@ -1,12 +1,14 @@
 import { type ServerResponse } from "node:http";
 import cookie from 'cookie';
-import type { PageHandler, IncomingMessage, EndpointHandler, RouteParams, AnyRequestEvent } from "./types.js";
+import type { PageHandler, IncomingMessage, EndpointHandler, RouteParams, AnyRequestEvent, XvelteHook } from "./types.js";
 export declare class XvelteApp {
     private template;
     private pageHandlerMap;
     private pagePatternHandlerMap;
     private endpointHandlerManager;
     private componentIdMap;
+    private staticPath?;
+    private hookFunction?;
     constructor(template: string);
     /**
      * 페이지 핸들러 추가
@@ -24,7 +26,16 @@ export declare class XvelteApp {
     delete<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>): void;
     /** 엔드포인트 핸들러 추가 */
     all<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>): void;
-    get handler(): (req: IncomingMessage, res: ServerResponse) => Promise<ServerResponse<import("http").IncomingMessage> | undefined>;
+    /**
+     * static 파일 경로 설정
+     * @param pathname
+     */
+    static(pathname: string): void;
+    /**
+     * hook 설정
+     */
+    hook(xvelteHook: XvelteHook): void;
+    get handler(): (req: IncomingMessage, res: ServerResponse) => Promise<boolean | ServerResponse<import("http").IncomingMessage> | undefined>;
     /**
      * HTTP 요청 핸들러. Node http 모듈, Express 등에서 사용 가능.
      * @param req
