@@ -7,7 +7,7 @@ import path from "node:path";
 import mime from 'mime-types'
 import pathToRegexp from "path-to-regexp";
 import cookie from 'cookie';
-import type { PageHandler, IncomingMessage, PageHandleData, EndpointHandler, AnyPageHandler, AnyEndpointHandler, RouteParams, XvelteResponse, AnyRequestEvent, RequestMethod } from "./types.js";
+import type { PageHandler, IncomingMessage, PageHandleData, EndpointHandler, AnyPageHandler, AnyEndpointHandler, RouteParams, XvelteResponse, AnyRequestEvent, RequestMethod, XvelteHook } from "./types.js";
 import { hash } from "node:crypto";
 import type { RenderingData } from "../types.js";
 import * as devalue from 'devalue';
@@ -22,6 +22,9 @@ export class XvelteApp {
     private endpointHandlerManager = new EndpointHandlerManager();
 
     private componentIdMap = new ComponentIdMap();
+
+    private staticPath?: string;
+    private hookFunction?: XvelteHook;
 
     constructor(template: string) {
         this.template = template;
@@ -70,7 +73,22 @@ export class XvelteApp {
         this.endpointHandlerManager.set(route, 'all', handler);
     }
 
-    get handler(){
+    /**
+     * static 파일 경로 설정
+     * @param pathname 
+     */
+    static(pathname: string) {
+        this.staticPath = pathname;
+    }
+
+    /**
+     * hook 설정
+     */
+    hook(xvelteHook: XvelteHook) {
+        this.hookFunction = xvelteHook;
+    }
+
+    get handler() {
         const THIS = this;
         return THIS.handle.bind(THIS);
     }
@@ -83,7 +101,17 @@ export class XvelteApp {
      */
     private async handle(req: IncomingMessage, res: ServerResponse) {
         try {
-            const event = new RequestEvent(req, res);
+            let event = new RequestEvent(req, res);
+            if (this.hookFunction) {
+                const r = await this.hookFunction(event);
+                if (r instanceof RequestEvent) {
+                    event = r;
+                }
+                else {
+                    return await this.sendResponse(event, r, res);
+                }
+            }
+            
             if (await this.sendResponse(event, await this.getXvelteClientFileResponse(event), res)) return;
             if (await this.sendResponse(event, await this.getNavigationResponse(event), res)) return;
 
@@ -100,6 +128,18 @@ export class XvelteApp {
                 }
 
                 if (await this.sendResponse(event, response, res)) return;
+            }
+
+            if (this.staticPath) {
+                const filePath = path.join(this.staticPath, event.url.pathname);
+                if (fs.existsSync(filePath)) {
+                    const mimeType = mime.contentType(path.basename(filePath));
+                    if (mimeType) {
+                        event.setHeader('content-type', mimeType);
+                    }
+                    const fileStream = fs.createReadStream(filePath);
+                    return await this.sendResponse(event, fileStream, res);
+                }
             }
 
             res.statusCode = 404;
@@ -214,9 +254,6 @@ export class XvelteApp {
             return true;
         }
         if (response === null) {
-            if (!res.writableEnded) {
-                res.end();
-            }
             return true;
         }
         if (response instanceof ReadStream) {
@@ -247,7 +284,7 @@ export class XvelteApp {
     * 클라이언트 스크립트와 클라이언트 컴포넌트 파일 전송
     */
     private async getXvelteClientFileResponse(event: AnyRequestEvent): Promise<XvelteResponse> {
-        if (event.url.pathname.startsWith('/__xvelte__/client')) {
+        if (event.url.pathname === '/__xvelte__/client' || event.url.pathname.startsWith('/__xvelte__/client/')) {
             const filePath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), event.url.pathname);
             if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
                 event.status = 404;
@@ -505,7 +542,7 @@ export class RequestEvent<Route extends string | RegExp> {
     }
     async form() {
         return await new Promise<{ fields: Record<string, string>, files: Record<string, { filename: string; mimeType: string; buffer: Buffer; }> }>(async (resolve, reject) => {
-            if(!("content-type" in this.requestHeaders)){
+            if (!("content-type" in this.requestHeaders)) {
                 return reject('Missing Content-Type header.');
             }
             const busboy = Busboy({ headers: this.requestHeaders });
