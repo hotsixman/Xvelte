@@ -111,7 +111,7 @@ export class XvelteApp {
                     return await this.sendResponse(event, r, res);
                 }
             }
-            
+
             if (await this.sendResponse(event, await this.getXvelteClientFileResponse(event), res)) return;
             if (await this.sendResponse(event, await this.getNavigationResponse(event), res)) return;
 
@@ -443,6 +443,20 @@ export class XvelteApp {
 
 export namespace XvelteApp {
     export const css = `xvelte-body, xvelte-island, xvelte-frag{display:contents;}`;
+    export function sequence(...hooks: XvelteHook[]): XvelteHook {
+        return async (event) => {
+            for (const hook of hooks) {
+                const maybeEvent = await hook(event);
+                if (maybeEvent instanceof RequestEvent) {
+                    event = maybeEvent;
+                }
+                else {
+                    return maybeEvent;
+                }
+            }
+            return event;
+        }
+    }
 }
 
 class ComponentIdMap {
