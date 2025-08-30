@@ -88,6 +88,7 @@ export declare class XvelteApp {
 }
 export declare namespace XvelteApp {
     const css = "xvelte-body, xvelte-island, xvelte-frag{display:contents;}";
+    function sequence(...hooks: XvelteHook[]): XvelteHook;
 }
 export declare class RequestEvent<Route extends string | RegExp> {
     url: URL;

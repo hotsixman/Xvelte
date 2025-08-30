@@ -397,6 +397,21 @@ export class XvelteApp {
 }
 (function (XvelteApp) {
     XvelteApp.css = `xvelte-body, xvelte-island, xvelte-frag{display:contents;}`;
+    function sequence(...hooks) {
+        return async (event) => {
+            for (const hook of hooks) {
+                const maybeEvent = await hook(event);
+                if (maybeEvent instanceof RequestEvent) {
+                    event = maybeEvent;
+                }
+                else {
+                    return maybeEvent;
+                }
+            }
+            return event;
+        };
+    }
+    XvelteApp.sequence = sequence;
 })(XvelteApp || (XvelteApp = {}));
 class ComponentIdMap {
     map = new Map();
