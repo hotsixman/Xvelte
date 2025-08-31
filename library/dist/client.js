@@ -3,4 +3,5 @@ export const replaceState = window.__xvelte__.history.replaceState;
 export const pushState = window.__xvelte__.history.pushState;
 export const page = window.__xvelte__.page;
 export const navigating = window.__xvelte__.navigating;
+export const globalContext = window.__xvelte__.context;
 //# sourceMappingURL=client.js.map

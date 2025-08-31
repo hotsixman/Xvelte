@@ -39,6 +39,6 @@ app.hook((event) => {
 
 export default app.handler;
 
-if (process.env.prod) {
+if (import.meta.env.PROD) {
     app.listen(3000, () => console.log('listening on 3000'));
 }

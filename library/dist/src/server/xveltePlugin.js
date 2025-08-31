@@ -25,6 +25,14 @@ export default function xveltePlugin() {
                 process.env.dev = "true";
                 delete process.env.prod;
             }
+            const xvelteServerCssPath = path.resolve(process.cwd(), '__xvelte__', 'server', 'css');
+            if (!fs.existsSync(xvelteServerCssPath)) {
+                fs.mkdirSync(xvelteServerCssPath, { recursive: true });
+            }
+            const xvelteClientCssPath = path.resolve(process.cwd(), '__xvelte__', 'client', 'css');
+            if (!fs.existsSync(xvelteClientCssPath)) {
+                fs.mkdirSync(xvelteClientCssPath, { recursive: true });
+            }
             if (!isDev) {
                 return {
                     ...config,
@@ -39,10 +47,10 @@ export default function xveltePlugin() {
                                         return 'svelte/internal';
                                     }
                                     if (id.endsWith('.svelte')) {
-                                        return generateHash(id);
+                                        return '_' + generateHash(id);
                                     }
                                     if (id.endsWith('.svelte?client')) {
-                                        const filePath = generateHash(id);
+                                        const filePath = '_' + generateHash(id);
                                         return filePath;
                                     }
                                 },
@@ -72,8 +80,7 @@ export default function xveltePlugin() {
         },
         async transform(code, id) {
             if (id.endsWith('.svelte')) {
-                const compiled = compile(code, { generate: 'server', css: 'injected', name: generateHash(id) });
-                return compiled.js;
+                return await buildServerComponent(code, id);
             }
             else if (id.endsWith('.svelte?client')) {
                 const realId = id.replace(/\?client$/, '');
@@ -83,7 +90,7 @@ export default function xveltePlugin() {
                 else {
                     clientSvelteFilePaths.add(realId);
                 }
-                return `const path = "/__xvelte__/client/${generateHash(realId)}.js"; export default path;`;
+                return `const path = "/__xvelte__/client/${'_' + generateHash(realId)}.js"; export default path;`;
             }
             if (id.endsWith('.svelte.js')) {
                 return compileModule(code, {}).js;
@@ -97,6 +104,7 @@ export default function xveltePlugin() {
         },
         async writeBundle(options) {
             await buildClientComponents(path.resolve(path.join(options.dir || '', '__xvelte__')));
+            copyServerComponentExternalCss(path.resolve(path.join(options.dir || '', '__xvelte__')));
         },
         async configureServer(server) {
             await buildXvelteClientScripts();
@@ -131,6 +139,65 @@ export default function xveltePlugin() {
         }
     };
     /**
+     * 서버 컴포넌트에서 js가 아닌 파일의 import 처리.
+     * production과 dev에서 모두 사용.
+     * @param code
+     * @param id
+     */
+    async function buildServerComponent(code, id) {
+        const clientDir = path.resolve(process.cwd(), '__xvelte__', 'client', 'css');
+        const serverDir = path.resolve(process.cwd(), '__xvelte__', 'server', 'css');
+        const name = '_' + generateHash(id);
+        const compiled = compile(code, { generate: 'server', css: 'injected', name });
+        const cssContents = [];
+        const result = await build({
+            format: 'esm',
+            platform: 'browser',
+            bundle: true,
+            write: false,
+            outdir: path.resolve(process.cwd(), '__xvelte__', 'server', 'css'),
+            stdin: {
+                contents: compiled.js.code,
+                resolveDir: path.dirname(id),
+                sourcefile: id,
+                loader: 'js'
+            },
+            plugins: [{
+                    name: 'server-css',
+                    setup(build) {
+                        build.onResolve({ filter: /\.(css|sass|scss)$/ }, args => ({ path: path.resolve(args.resolveDir, args.path), namespace: 'css' }));
+                        build.onResolve({ filter: /.*/ }, args => ({ path: args.path, external: true }));
+                        build.onLoad({ filter: /\.css$/ }, (args) => {
+                            const css = fs.readFileSync(args.path, 'utf-8');
+                            cssContents.push([generateHash(args.path), css]);
+                            return { contents: "", loader: "js" };
+                        });
+                        build.onLoad({ filter: /\.scss$/ }, (args) => {
+                            const scss = fs.readFileSync(args.path, 'utf-8');
+                            const css = sass.compileString(scss, { style: "compressed" }).css;
+                            cssContents.push([generateHash(args.path), css]);
+                            return { contents: "", loader: "js" };
+                        });
+                        build.onLoad({ filter: /\.sass$/ }, (args) => {
+                            const sassString = fs.readFileSync(args.path, 'utf-8');
+                            const css = sass.compileString(sassString, { style: "compressed" }).css;
+                            cssContents.push([generateHash(args.path), css]);
+                            return { contents: "", loader: "js" };
+                        });
+                    }
+                }],
+            keepNames: true
+        });
+        cssContents.forEach(([hash, content]) => {
+            const cssDir = path.resolve(clientDir, `${hash}.css`);
+            if (!fs.existsSync(cssDir)) {
+                fs.writeFileSync(cssDir, content, 'utf-8');
+            }
+        });
+        fs.writeFileSync(path.resolve(serverDir, `${name}_css.js`), `const cssData = ${JSON.stringify(cssContents.map(([hash, _]) => hash))}; export default cssData;`, 'utf-8');
+        return result.outputFiles[0].text;
+    }
+    /**
      * production build에서 사용
      * @param dir
      */
@@ -150,7 +217,7 @@ export default function xveltePlugin() {
             [path.resolve(dir, 'client', 'xvelte')]: xvelteClientScriptPath
         };
         clientSvelteFilePaths.forEach((original) => {
-            entryPoints[path.resolve(dir, 'client', generateHash(original))] = original;
+            entryPoints[path.resolve(dir, 'client', '_' + generateHash(original))] = original;
         });
         await build({
             format: 'esm',
@@ -175,11 +242,12 @@ export default function xveltePlugin() {
                                 }
                             }
                         });
-                        cssLoader(build);
+                        clientCssLoader(build);
                     }
                 }
             ],
-            loader: esbuildLoader()
+            loader: esbuildLoader(),
+            keepNames: true
         });
         devFileChanged = false;
     }
@@ -205,7 +273,8 @@ export default function xveltePlugin() {
             bundle: true,
             splitting: true,
             entryPoints,
-            outdir: path.resolve(process.cwd(), '__xvelte__', 'client')
+            outdir: path.resolve(process.cwd(), '__xvelte__', 'client'),
+            keepNames: true
         });
     }
     /**
@@ -213,7 +282,8 @@ export default function xveltePlugin() {
      * @returns
      */
     async function buildSingleClientComponent(code, id) {
-        const compiled = compile(code, { generate: 'client', css: 'injected', name: generateHash(id) });
+        const name = '_' + generateHash(id);
+        const compiled = compile(code, { generate: 'client', css: 'injected', name });
         await build({
             stdin: {
                 contents: compiled.js.code,
@@ -221,7 +291,7 @@ export default function xveltePlugin() {
                 sourcefile: id,
                 loader: 'js'
             },
-            outfile: path.resolve(process.cwd(), '__xvelte__', 'client', `${generateHash(id)}.js`),
+            outfile: path.resolve(process.cwd(), '__xvelte__', 'client', `${name}.js`),
             format: 'esm',
             platform: 'browser',
             bundle: true,
@@ -234,10 +304,11 @@ export default function xveltePlugin() {
                                 external: true
                             };
                         });
-                        cssLoader(build);
+                        clientCssLoader(build);
                     }
                 }],
-            loader: esbuildLoader()
+            loader: esbuildLoader(),
+            keepNames: true
         });
     }
     function esbuildLoader() {
@@ -256,115 +327,51 @@ export default function xveltePlugin() {
             '.svg': 'dataurl'
         };
     }
-    function cssLoader(build) {
+    function clientCssLoader(build) {
+        build.onResolve({ filter: /\.(css|sass|scss)$/ }, args => ({ path: path.resolve(args.resolveDir, args.path), namespace: 'css' }));
         build.onLoad({ filter: /\.css$/ }, (args) => {
             const css = fs.readFileSync(args.path, 'utf-8');
-            const contents = `
-                if (typeof document !== 'undefined') {
-                    const style = document.createElement('style');
-                    style.textContent = ${JSON.stringify(css)};
-                    document.head.appendChild(style);
-                }
-                `;
+            const contents = generateContents(css, args.path);
             return { contents, loader: "js" };
         });
         build.onLoad({ filter: /\.scss$/ }, (args) => {
             const scss = fs.readFileSync(args.path, 'utf-8');
             const css = sass.compileString(scss, { style: "compressed" }).css;
-            const contents = `
-                if (typeof document !== 'undefined') {
-                    const style = document.createElement('style');
-                    style.textContent = ${JSON.stringify(css)};
-                    document.head.appendChild(style);
-                }
-                `;
+            const contents = generateContents(css, args.path);
             return { contents, loader: "js" };
         });
         build.onLoad({ filter: /\.sass$/ }, (args) => {
             const sassString = fs.readFileSync(args.path, 'utf-8');
             const css = sass.compileString(sassString, { style: "compressed" }).css;
-            const contents = `
-                if (typeof document !== 'undefined') {
+            const contents = generateContents(css, args.path);
+            return { contents, loader: "js" };
+        });
+        function generateContents(css, path) {
+            const hash = '_' + generateHash(path);
+            return `
+                if (typeof document !== 'undefined' && !document.getElementById(${JSON.stringify(hash)})) {
                     const style = document.createElement('style');
+                    style.setAttribute('id', ${JSON.stringify(hash)});
                     style.textContent = ${JSON.stringify(css)};
                     document.head.appendChild(style);
                 }
                 `;
-            return { contents, loader: "js" };
-        });
+        }
     }
-    function viteLikeAssets() {
-        return {
-            name: 'vite-like-assets',
-            setup(build) {
-                //const textFileRegex = /\.(txt|glsl|md|svg|css|json)$/i
-                // --- ?raw → 파일 내용을 문자열로 import ---
-                build.onLoad({ filter: /\?raw$/ }, async (args) => {
-                    const filePath = args.path.replace(/\?raw$/, '');
-                    const contents = fs.readFileSync(filePath, 'utf8');
-                    return {
-                        contents: `export default ${JSON.stringify(contents)}`,
-                        loader: 'js',
-                    };
-                });
-                // --- ?inline → base64 data URL ---
-                build.onLoad({ filter: /\?inline$/ }, async (args) => {
-                    const filePath = args.path.replace(/\?inline$/, '');
-                    const data = fs.readFileSync(filePath);
-                    const ext = path.extname(filePath).slice(1);
-                    const mime = ext === 'svg'
-                        ? 'image/svg+xml'
-                        : ext === 'css'
-                            ? 'text/css'
-                            : `image/${ext}`;
-                    const base64 = data.toString('base64');
-                    return {
-                        contents: `export default "data:${mime};base64,${base64}"`,
-                        loader: 'js',
-                    };
-                });
-                // --- 기본 이미지/폰트 → file loader 흉내 ---
-                build.onResolve({
-                    filter: /\.(png|jpe?g|gif|webp|avif|ico|ttf|woff2?|eot|svg)$/i,
-                }, (args) => {
-                    return { path: path.resolve(args.importer, args.path), namespace: 'file-inline' };
-                });
-                build.onLoad({ filter: /.*/, namespace: 'file-inline' }, async (args) => {
-                    const data = fs.readFileSync(args.path);
-                    const ext = path.extname(args.path).slice(1);
-                    let mime;
-                    // 이미지 MIME
-                    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'ico'].includes(ext)) {
-                        mime = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
-                    }
-                    // 폰트 MIME
-                    else if (['ttf', 'woff', 'woff2', 'eot'].includes(ext)) {
-                        mime = ext === 'ttf' ? 'font/ttf' :
-                            ext === 'woff' ? 'font/woff' :
-                                ext === 'woff2' ? 'font/woff2' : 'application/octet-stream';
-                    }
-                    else if (ext === 'svg') {
-                        mime = 'image/svg+xml';
-                    }
-                    else {
-                        mime = 'application/octet-stream';
-                    }
-                    const base64 = data.toString('base64');
-                    return {
-                        contents: `export default "data:${mime};base64,${base64}"`,
-                        loader: 'js',
-                    };
-                });
-                // --- JSON → ESM (esbuild는 기본 loader로도 가능하지만 일관성을 위해 추가) ---
-                build.onLoad({ filter: /\.json$/ }, async (args) => {
-                    const json = fs.readFileSync(args.path, 'utf8');
-                    return {
-                        contents: `export default ${json}`,
-                        loader: 'js',
-                    };
-                });
-            },
-        };
+    ;
+    function copyServerComponentExternalCss(dir) {
+        const clientDir = path.resolve(process.cwd(), '__xvelte__', 'client', 'css');
+        const serverDir = path.resolve(process.cwd(), '__xvelte__', 'server', 'css');
+        const clientDestDir = path.resolve(dir, 'client', 'css');
+        const serverDestDir = path.resolve(dir, 'server', 'css');
+        if (!fs.existsSync(clientDestDir)) {
+            //fs.mkdirSync(clientDestDir, { recursive: true });
+        }
+        if (!fs.existsSync(serverDestDir)) {
+            //fs.mkdirSync(serverDestDir, { recursive: true });
+        }
+        fs.cpSync(clientDir, clientDestDir, { recursive: true, force: true });
+        fs.cpSync(serverDir, serverDestDir, { recursive: true, force: true });
     }
 }
 //# sourceMappingURL=xveltePlugin.js.map

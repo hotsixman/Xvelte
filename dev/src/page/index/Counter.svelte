@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { getContext } from "svelte";
     interface Props {
         init?: number;
     }
@@ -15,7 +14,7 @@
 </div>
 
 <style>
-    button {
+    div {
         color: purple;
     }
 </style>

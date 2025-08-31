@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import { createServer, type ServerResponse } from "node:http";
 import { HTMLElement, parse as parseHtml } from 'node-html-parser'
 import { render } from "svelte/server";
@@ -7,7 +9,7 @@ import path from "node:path";
 import mime from 'mime-types'
 import pathToRegexp from "path-to-regexp";
 import cookie from 'cookie';
-import type { PageHandler, IncomingMessage, PageHandleData, EndpointHandler, AnyPageHandler, AnyEndpointHandler, RouteParams, XvelteResponse, AnyRequestEvent, RequestMethod, XvelteHook } from "./types.js";
+import type { PageHandler, IncomingMessage, PageHandleData, EndpointHandler, AnyPageHandler, AnyEndpointHandler, RouteParams, XvelteResponse, AnyRequestEvent, RequestMethod, XvelteHook, MaybePromise } from "./types.js";
 import { hash } from "node:crypto";
 import type { RenderingData } from "../types.js";
 import * as devalue from 'devalue';
@@ -285,7 +287,7 @@ export class XvelteApp {
     */
     private async getXvelteClientFileResponse(event: AnyRequestEvent): Promise<XvelteResponse> {
         if (event.url.pathname === '/__xvelte__/client' || event.url.pathname.startsWith('/__xvelte__/client/')) {
-            const filePath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), event.url.pathname);
+            const filePath = path.join(import.meta.env.DEV ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), event.url.pathname);
             if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
                 event.status = 404;
                 return null;
@@ -304,10 +306,20 @@ export class XvelteApp {
     /**
      * 페이지 핸들러로 렌더링
      */
-    private renderPage(data: PageHandleData<any, any>): RenderingData {
+    private async renderPage(data: PageHandleData<any, any>): Promise<RenderingData> {
         const context = new Map<string, any>();
 
-        const layouts = (data.layouts ?? []).map((l) => {
+        const layouts = await asyncMap(data.layouts ?? [], async (l) => {
+            const cssModulePath = path.join(import.meta.env.DEV ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), '__xvelte__', 'server', 'css', `${l.component.name}_css.js`);
+            let cssData: string[] = [];
+            if (fs.existsSync(cssModulePath)) {
+                await import(/* @vite-ignore */ cssModulePath)
+                    .then((module) => {
+                        cssData = module.default as string[]
+                    })
+                    .catch(() => { });
+            }
+
             const id = this.componentIdMap.register(l.component);
             const rendered = render(l.component, {
                 props: l.props,
@@ -317,13 +329,28 @@ export class XvelteApp {
             dom.querySelectorAll('xvelte-island').forEach((island) => {
                 island.setAttribute('data-frag-id', id);
             })
+
+            let head = rendered.head;
+            for (const href of cssData) {
+                head += `<link href="/__xvelte__/client/css/${href}.css" rel="stylesheet" />`;
+            }
+
             return {
                 id,
-                head: rendered.head,
+                head,
                 body: dom.innerHTML
             }
         });
 
+        const cssModulePath = path.join(import.meta.env.DEV ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), '__xvelte__', 'server', 'css', `${data.component.name}_css.js`);
+        let cssData: string[] = [];
+        if (fs.existsSync(cssModulePath)) {
+            await import(/* @vite-ignore */ cssModulePath)
+                .then((module) => {
+                    cssData = module.default as string[]
+                })
+                .catch(() => { });
+        }
         const id = this.componentIdMap.register(data.component);
         const rendered = render(data.component, {
             props: data.props,
@@ -332,10 +359,14 @@ export class XvelteApp {
         const dom = parseHtml(rendered.body, { comment: true });
         dom.querySelectorAll('xvelte-island').forEach((island) => {
             island.setAttribute('data-frag-id', id);
-        })
+        });
+        let head = rendered.head;
+        for (const href of cssData) {
+            head += `<link href="/__xvelte__/client/css/${href}.css" rel="stylesheet" />`;
+        }
         const page = {
             id: this.componentIdMap.register(data.component),
-            head: rendered.head,
+            head,
             body: dom.innerHTML
         };
 
@@ -351,13 +382,13 @@ export class XvelteApp {
             return null;
         }
 
-        const renderingData = this.renderPage(pageHandleData);
+        const renderingData = await this.renderPage(pageHandleData);
         const dom = parseHtml(this.template, { comment: true });
 
         const xvelteHead = dom.querySelector('xvelte-head');
         if (xvelteHead) {
             const newXvelteHead = parseHtml('<!--xvelte-head-->', { comment: true });
-            if (process.env.dev) {
+            if (import.meta.env.DEV) {
                 newXvelteHead.innerHTML += '<script type="module" src="/@vite/client"></script>';
             }
             newXvelteHead.innerHTML += `<style>${XvelteApp.css}</style>`;
@@ -436,7 +467,7 @@ export class XvelteApp {
         const renderingData = await handler(event);
         if (!renderingData) return null;
 
-        const renderedData = this.renderPage(renderingData);
+        const renderedData = await this.renderPage(renderingData);
         return JSON.stringify(renderedData);
     }
 }
@@ -680,4 +711,13 @@ class EndpointHandlerManager {
 
 function pathify(path_: string) {
     return new URL(path_, 'http://void').pathname;
+}
+
+async function asyncMap<T extends any, U>(array: T[], callback: (element: T, index: number, array: T[]) => MaybePromise<U>) {
+    const results: U[] = [];
+    for (let index = 0; index < array.length; index++) {
+        const element = array[index];
+        results.push(await callback.call(array, element, index, array));
+    }
+    return results;
 }

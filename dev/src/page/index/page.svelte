@@ -1,6 +1,7 @@
 <script>
     import Island from "../../../../library/src/components/Island.svelte";
     import Counter from "./counter.svelte?client";
+    import './style.css';
 </script>
 
 <div>메인페이지</div>
@@ -17,9 +18,3 @@
     <input type="file" name="f">
     <button type="submit">asd</button>
 </form>
-
-<style>
-    div {
-        color: red;
-    }
-</style>
