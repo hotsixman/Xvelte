@@ -1,7 +1,0 @@
-node_modules
-tests
-package-lock.json
-bun.lock
-.xvelte
-build
-__xvelte__
