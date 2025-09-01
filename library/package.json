@@ -2,7 +2,7 @@
   "name": "@hotsixman/xvelte",
   "repository": "https://github.com/hotsixman/xvelte",
   "author": "hotsixman",
-  "version": "0.8.0",
+  "version": "0.8.2",
   "main": "./dist/index.js",
   "exports": {
     ".": "./dist/index.js",
@@ -12,6 +12,7 @@
     "./components/*": "./src/components/*",
     "./dts/*": "./dts/*"
   },
+  "bin": "./script/xvelte-setup/index.mjs",
   "dependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.1.1",
     "@types/express": "^5.0.3",
