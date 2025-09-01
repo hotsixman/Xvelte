@@ -16,7 +16,6 @@ export class XvelteApp {
     pagePatternHandlerMap = new Map();
     endpointHandlerManager = new EndpointHandlerManager();
     componentIdMap = new ComponentIdMap();
-    staticPath;
     hookFunction;
     constructor(template) {
         this.template = template;
@@ -60,13 +59,6 @@ export class XvelteApp {
     /** 엔드포인트 핸들러 추가 */
     all(route, handler) {
         this.endpointHandlerManager.set(route, 'all', handler);
-    }
-    /**
-     * static 파일 경로 설정
-     * @param pathname
-     */
-    static(pathname) {
-        this.staticPath = pathname;
     }
     /**
      * hook 설정
@@ -113,16 +105,15 @@ export class XvelteApp {
                 if (await this.sendResponse(event, response, res))
                     return;
             }
-            if (this.staticPath) {
-                const filePath = path.join(this.staticPath, event.url.pathname);
-                if (fs.existsSync(filePath)) {
-                    const mimeType = mime.contentType(path.basename(filePath));
-                    if (mimeType) {
-                        event.setHeader('content-type', mimeType);
-                    }
-                    const fileStream = fs.createReadStream(filePath);
-                    return await this.sendResponse(event, fileStream, res);
+            const staticPath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), 'static');
+            const filePath = path.join(staticPath, event.url.pathname);
+            if (fs.existsSync(filePath)) {
+                const mimeType = mime.contentType(path.basename(filePath));
+                if (mimeType) {
+                    event.setHeader('content-type', mimeType);
                 }
+                const fileStream = fs.createReadStream(filePath);
+                return await this.sendResponse(event, fileStream, res);
             }
             res.statusCode = 404;
             return res.end('404 Error');
@@ -254,7 +245,7 @@ export class XvelteApp {
     */
     async getXvelteClientFileResponse(event) {
         if (event.url.pathname === '/__xvelte__/client' || event.url.pathname.startsWith('/__xvelte__/client/')) {
-            const filePath = path.join(import.meta.env.DEV ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), event.url.pathname);
+            const filePath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), event.url.pathname);
             if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
                 event.status = 404;
                 return null;
@@ -274,7 +265,7 @@ export class XvelteApp {
     async renderPage(data) {
         const context = new Map();
         const layouts = await asyncMap(data.layouts ?? [], async (l) => {
-            const cssModulePath = path.join(import.meta.env.DEV ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), '__xvelte__', 'server', 'css', `${l.component.name}_css.js`);
+            const cssModulePath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), '__xvelte__', 'server', 'css', `${l.component.name}_css.js`);
             let cssData = [];
             if (fs.existsSync(cssModulePath)) {
                 await import(/* @vite-ignore */ cssModulePath)
@@ -302,7 +293,7 @@ export class XvelteApp {
                 body: dom.innerHTML
             };
         });
-        const cssModulePath = path.join(import.meta.env.DEV ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), '__xvelte__', 'server', 'css', `${data.component.name}_css.js`);
+        const cssModulePath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), '__xvelte__', 'server', 'css', `${data.component.name}_css.js`);
         let cssData = [];
         if (fs.existsSync(cssModulePath)) {
             await import(/* @vite-ignore */ cssModulePath)
@@ -344,7 +335,7 @@ export class XvelteApp {
         const xvelteHead = dom.querySelector('xvelte-head');
         if (xvelteHead) {
             const newXvelteHead = parseHtml('<!--xvelte-head-->', { comment: true });
-            if (import.meta.env.DEV) {
+            if (process.env.dev) {
                 newXvelteHead.innerHTML += '<script type="module" src="/@vite/client"></script>';
             }
             newXvelteHead.innerHTML += `<style>${XvelteApp.css}</style>`;

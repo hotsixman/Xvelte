@@ -105,6 +105,7 @@ export default function xveltePlugin() {
         async writeBundle(options) {
             await buildClientComponents(path.resolve(path.join(options.dir || '', '__xvelte__')));
             copyServerComponentExternalCss(path.resolve(path.join(options.dir || '', '__xvelte__')));
+            copyStaticFolder(path.resolve(options.dir || ''));
         },
         async configureServer(server) {
             await buildXvelteClientScripts();
@@ -372,6 +373,12 @@ export default function xveltePlugin() {
         }
         fs.cpSync(clientDir, clientDestDir, { recursive: true, force: true });
         fs.cpSync(serverDir, serverDestDir, { recursive: true, force: true });
+    }
+    function copyStaticFolder(dir) {
+        const staticFolder = path.resolve(process.cwd(), 'static');
+        if (!fs.existsSync(staticFolder))
+            return;
+        fs.cpSync(staticFolder, path.resolve(dir, 'static'), { recursive: true, force: true });
     }
 }
 //# sourceMappingURL=xveltePlugin.js.map

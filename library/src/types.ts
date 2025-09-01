@@ -11,3 +11,7 @@ export type RenderingDataElement = {
     head: string;
     body: string;
 }
+
+export type XveltePluginOption = {
+    staticPath: string;
+}

@@ -6,6 +6,7 @@ import { build, type Plugin as EsbuildPlugin, type Loader, type PluginBuild } fr
 import fs, { read } from "node:fs";
 import { XvelteApp } from "./XvelteApp.js";
 import * as sass from 'sass';
+import type { XveltePluginOption } from "../types.js";
 
 /**
  * @todo 개발서버 일 때, client 컴포넌트들을 별도의 폴더에 번들링하여 저장해놓기
@@ -111,6 +112,7 @@ export default function xveltePlugin(): Plugin {
         async writeBundle(options) {
             await buildClientComponents(path.resolve(path.join(options.dir || '', '__xvelte__')));
             copyServerComponentExternalCss(path.resolve(path.join(options.dir || '', '__xvelte__')));
+            copyStaticFolder(path.resolve(options.dir || ''));
         },
         async configureServer(server) {
             await buildXvelteClientScripts();
@@ -397,5 +399,13 @@ export default function xveltePlugin(): Plugin {
 
         fs.cpSync(clientDir, clientDestDir, { recursive: true, force: true });
         fs.cpSync(serverDir, serverDestDir, { recursive: true, force: true })
+    }
+
+    function copyStaticFolder(dir: string){
+        const staticFolder = path.resolve(process.cwd(), 'static');
+
+        if(!fs.existsSync(staticFolder)) return;
+
+        fs.cpSync(staticFolder, path.resolve(dir, 'static'), {recursive: true, force: true});
     }
 }

@@ -7,7 +7,6 @@ export declare class XvelteApp {
     private pagePatternHandlerMap;
     private endpointHandlerManager;
     private componentIdMap;
-    private staticPath?;
     private hookFunction?;
     constructor(template: string);
     /**
@@ -26,11 +25,6 @@ export declare class XvelteApp {
     delete<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>): void;
     /** 엔드포인트 핸들러 추가 */
     all<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>): void;
-    /**
-     * static 파일 경로 설정
-     * @param pathname
-     */
-    static(pathname: string): void;
     /**
      * hook 설정
      */
