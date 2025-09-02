@@ -30,12 +30,11 @@ app.get('/test', async (event) => {
     return null;
 });
 
-app.static(path.resolve(import.meta.dirname, '..', 'static'));
-
-app.hook((event) => {
-    console.log('pathname: ', event.url.pathname);
-    return event;
-})
+app.hook(XvelteApp.sequence(
+    (event) => {
+        return event;
+    }
+));
 
 export default app.handler;
 

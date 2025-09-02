@@ -30,7 +30,7 @@ export class FragManager {
         let currentStart = null;
         let currentId = null;
         let inFragFlag = false;
-        let headFrag = document.createElement('template');
+        //let headFrag = document.createElement('template');
         document.head.childNodes.forEach((node) => {
             if (!(node instanceof Comment))
                 return;
@@ -59,11 +59,11 @@ export class FragManager {
                 currentStart = null;
                 currentId = null;
                 inFragFlag = false;
-                headFrag.remove();
-                headFrag = document.createElement('template');
+                //headFrag.remove();
+                //headFrag = document.createElement('template');
             }
             else if (inFragFlag) {
-                headFrag.appendChild(node);
+                //headFrag.appendChild(node);
             }
         });
         if (headStart && headEnd) {
