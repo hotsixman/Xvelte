@@ -3,7 +3,6 @@ import template from './app.html?raw';
 import Layout from "./page/layout.svelte";
 import IndexPage from "./page/index/page.svelte";
 import AboutPage from "./page/about/page.svelte";
-import path from "node:path";
 
 const app = new XvelteApp(template);
 
@@ -23,6 +22,11 @@ app.page('/about', () => ({
     ],
     component: AboutPage
 }))
+
+app.page('/testpage', (event) => {
+    event.status = 400;
+    return 'hahaha';
+})
 
 app.get('/test', async (event) => {
     const formData = await event.form();
