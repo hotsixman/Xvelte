@@ -15,13 +15,54 @@ import type { RenderingData } from "../types.js";
 import * as devalue from 'devalue';
 import Busboy from 'busboy';
 
+const pageRoutesMap = new Map<string, AnyPageHandler>();
+const endpointRoutes: [string, 'get' | 'post' | 'put' | 'delete' | 'all', AnyEndpointHandler][] = [];
+
+if (import.meta.env?.PROD) {
+    const routesDirPath = path.resolve(process.argv[1] ? path.dirname(process.argv[1]) : process.cwd(), 'routes').replaceAll('\\', '/');
+    const entries = fs.globSync(path.resolve(routesDirPath, '*.js'));
+
+    const rootRouterPath = path.resolve(routesDirPath, '..js');
+    if (fs.existsSync(rootRouterPath)) {
+        entries.unshift(path.resolve(routesDirPath, '..js'));
+    }
+
+    for (let entry of entries) {
+        entry = entry.replaceAll('\\', '/');
+        try {
+            const basename = path.basename(entry).replace(/\.(.*)js$/, '');
+            const module = await import(/* @vite-ignore */`file://${path.resolve(routesDirPath, `${encodeURIComponent(basename) || '.'}.js`)}`);
+            const route = toRoutePath('/' + decodeURIComponent(basename));
+            if ("page" in module) {
+                pageRoutesMap.set(route, module.page);
+            }
+            (['get', 'post', 'put', 'delete', 'all'] as const).forEach((method) => {
+                if (method in module) {
+                    endpointRoutes.push([route, method, module.get])
+                }
+            })
+        }
+        catch (err) {
+            console.log(`${entry} is not a javascript module.`);
+        }
+    }
+
+    function toRoutePath(basename: string) {
+        return basename
+            .replace(/index$/, '')        // index는 생략
+            .replace(/\[\.{3}.+\]/, '*')  // [...all] -> *
+            .replace(/\[(.+?)\]/g, ':$1') // [id] -> :id
+            .replace(/\/+/g, '/');
+    }
+}
+
 export class XvelteApp {
     private template: string;
 
     private pageHandlerMap = new Map<string, AnyPageHandler>();
     private pagePatternHandlerMap = new Map<pathToRegexp.MatchFunction<pathToRegexp.ParamData> | RegExp, AnyPageHandler>();
-
     private endpointHandlerManager = new EndpointHandlerManager();
+    allHandlers: (['page', string | RegExp, AnyPageHandler] | ['endpoint', string | RegExp, 'get' | 'post' | 'put' | 'delete' | 'all', AnyEndpointHandler])[] = [];
 
     private componentIdMap = new ComponentIdMap();
 
@@ -29,6 +70,12 @@ export class XvelteApp {
 
     constructor(template: string) {
         this.template = template;
+        pageRoutesMap.forEach((handler, route) => {
+            this.page(route, handler);
+        });
+        endpointRoutes.forEach(([route, method, handler]) => {
+            this[method](route, handler);
+        })
     }
 
     /**
@@ -37,6 +84,7 @@ export class XvelteApp {
      * @param handler 
      */
     page<Route extends string | RegExp, Props extends Record<string, any>, LayoutProps extends Record<string, any>[]>(route: Route, handler: PageHandler<Route, Props, LayoutProps>) {
+        this.allHandlers.push(['page', route, handler]);
         if (typeof (route) === "string") {
             const route_ = pathify(route)
 
@@ -55,22 +103,27 @@ export class XvelteApp {
 
     /** Get 엔드포인트 핸들러 추가 */
     get<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>) {
+        this.allHandlers.push(['endpoint', route, 'get', handler]);
         this.endpointHandlerManager.set(route, 'get', handler);
     }
     /** Post 엔드포인트 핸들러 추가 */
     post<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>) {
+        this.allHandlers.push(['endpoint', route, 'post', handler])
         this.endpointHandlerManager.set(route, 'post', handler);
     }
     /** Put 엔드포인트 핸들러 추가 */
     put<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>) {
+        this.allHandlers.push(['endpoint', route, 'put', handler])
         this.endpointHandlerManager.set(route, 'put', handler);
     }
     /** Delete 엔드포인트 핸들러 추가 */
     delete<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>) {
+        this.allHandlers.push(['endpoint', route, 'delete', handler])
         this.endpointHandlerManager.set(route, 'delete', handler);
     }
     /** 엔드포인트 핸들러 추가 */
     all<Route extends string | RegExp>(route: Route, handler: EndpointHandler<Route>) {
+        this.allHandlers.push(['endpoint', route, 'all', handler])
         this.endpointHandlerManager.set(route, 'all', handler);
     }
 
@@ -83,7 +136,9 @@ export class XvelteApp {
 
     get handler() {
         const THIS = this;
-        return THIS.handle.bind(THIS);
+        const handler = THIS.handle.bind(THIS);
+        Object.defineProperty(handler, "app", { value: THIS, writable: false });
+        return handler as (XvelteApp['handle'] & { app: XvelteApp });
     }
 
     /**
@@ -125,7 +180,8 @@ export class XvelteApp {
 
             const staticPath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), 'static');
             const filePath = path.join(staticPath, event.url.pathname);
-            if (fs.existsSync(filePath)) {
+
+            if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
                 const mimeType = mime.contentType(path.basename(filePath));
                 if (mimeType) {
                     event.setHeader('content-type', mimeType);
@@ -368,6 +424,9 @@ export class XvelteApp {
      */
     private async getPageResponse(event: AnyRequestEvent, handler: AnyPageHandler): Promise<XvelteResponse> {
         const pageHandleData = await handler(event);
+        if (typeof (pageHandleData) === "string") {
+            return pageHandleData;
+        }
         if (!pageHandleData) {
             return null;
         }
@@ -455,6 +514,11 @@ export class XvelteApp {
         event.url = to;
         RequestEvent.setParams(event, params);
         const renderingData = await handler(event);
+        if (typeof (renderingData) === "string"){
+            event.status = 302;
+            event.setHeader('location', to.href);
+            return renderingData;
+        };
         if (!renderingData) return null;
 
         const renderedData = await this.renderPage(renderingData);

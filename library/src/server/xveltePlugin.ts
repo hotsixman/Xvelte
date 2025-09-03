@@ -6,8 +6,7 @@ import { build, type Plugin as EsbuildPlugin, type Loader, type PluginBuild } fr
 import fs, { read } from "node:fs";
 import { XvelteApp } from "./XvelteApp.js";
 import * as sass from 'sass';
-import type { XveltePluginOption } from "../types.js";
-
+import regexpEscape from 'regexp.escape'
 /**
  * @todo 개발서버 일 때, client 컴포넌트들을 별도의 폴더에 번들링하여 저장해놓기
  * @returns 
@@ -41,18 +40,31 @@ export default function xveltePlugin(): Plugin {
             }
 
             if (!isDev) {
+                const appJsPath = fs.existsSync('src/app.js') ? 'src/app.js' : 'src/app.ts';
                 return {
                     ...config,
                     build: {
-                        ssr: fs.existsSync('src/app.js') ? 'src/app.js' : 'src/app.ts',
+                        ssr: true,
                         rollupOptions: {
-                            input: fs.existsSync('src/app.js') ? 'src/app.js' : 'src/app.ts',
+                            input: {
+                                'app': appJsPath,
+                                ...Object.fromEntries(fs.globSync('src/routes/**/+server.{js,ts}').map((p) => [p, p]))
+                            },
                             output: {
-                                entryFileNames: 'app.js',
+                                entryFileNames: (p) => {
+                                    if (p.name === 'app') {
+                                        return 'app.js';
+                                    }
+                                    let name = (p.facadeModuleId ?? p.moduleIds[0]);
+                                    name = path.dirname(name.slice(name.indexOf('src/routes/') + 11)) + '.js';
+                                    return 'routes/' + encodeURIComponent(name);
+                                },
                                 manualChunks(id) {
+                                    /*
                                     if (id.includes('node_modules/svelte/internal')) {
                                         return 'svelte/internal';
                                     }
+                                    */
                                     if (id.endsWith('.svelte')) {
                                         return '_' + generateHash(id);
                                     }
@@ -118,22 +130,57 @@ export default function xveltePlugin(): Plugin {
             await buildXvelteClientScripts();
             server.middlewares.use(async (req, res, next) => {
                 try {
-                    if (req.url?.startsWith('/@vite') || req.url?.startsWith('/node_modules') || req.url?.startsWith('/.well-known')) {
+                    if (req.url?.startsWith('/@vite') || req.url?.startsWith('/node_modules')) {
                         return next();
                     }
                     else {
-                        const handler = await server.ssrLoadModule(path.resolve(process.cwd(), 'src/app')).then((module) => module.default as XvelteApp['handler']);
-                        if (devFileChanged && clientSvelteFilePaths.size > 0) {
-                            //await buildClientComponents(path.resolve(process.cwd(), '__xvelte__'));
+                        const app = await server.ssrLoadModule(path.resolve(process.cwd(), 'src/app')).then((module) => module.default.app as XvelteApp);
+                        //@ts-expect-error
+                        const devApp = new XvelteApp(app.template);
+                        const fileRouterDirPath = path.resolve(process.cwd(), 'src', 'routes').replaceAll('\\', '/');
+                        for (let entry of fs.globSync(path.join(fileRouterDirPath, '**/+server.{js,ts}'))) {
+                            entry = entry.replaceAll('\\', '/');
+                            try {
+                                const module = await server.ssrLoadModule(entry);
+                                const route = toRoutePath(path.dirname(entry.replace(new RegExp(`^${regexpEscape(fileRouterDirPath)}`), '')));
+                                if ("page" in module) {
+                                    devApp.page(route, module.page);
+                                }
+                                (['get', 'post', 'put', 'delete', 'all'] as const).forEach((method) => {
+                                    if (method in module) {
+                                        devApp[method](route, module[method]);
+                                    }
+                                })
+                            }
+                            catch (err) {
+                                console.log(`${entry} is not a javascript module.`);
+                            }
                         }
-                        return await handler(req as any, res);
+
+                        app.allHandlers.forEach((value) => {
+                            if (value[0] === "page") {
+                                devApp.page(value[1], value[2]);
+                            }
+                            else {
+                                devApp[value[2]](value[1], value[3]);
+                            }
+                        })
+
+                        return await devApp.handler(req as any, res);
                     }
                 }
                 catch (err) {
                     server.ssrFixStacktrace(err as Error);
                     next(err);
                 }
-            })
+            });
+            function toRoutePath(basename: string) {
+                return basename
+                    .replace(/index$/, '')        // index는 생략
+                    .replace(/\[\.{3}.+\]/, '*')  // [...all] -> *
+                    .replace(/\[(.+?)\]/g, ':$1') // [id] -> :id
+                    .replace(/\/+/g, '/');
+            };
         },
         async handleHotUpdate({ file, server }) {
             if (path.matchesGlob(file, path.resolve(process.cwd(), 'src/**/*'))) {
@@ -401,11 +448,11 @@ export default function xveltePlugin(): Plugin {
         fs.cpSync(serverDir, serverDestDir, { recursive: true, force: true })
     }
 
-    function copyStaticFolder(dir: string){
+    function copyStaticFolder(dir: string) {
         const staticFolder = path.resolve(process.cwd(), 'static');
 
-        if(!fs.existsSync(staticFolder)) return;
+        if (!fs.existsSync(staticFolder)) return;
 
-        fs.cpSync(staticFolder, path.resolve(dir, 'static'), {recursive: true, force: true});
+        fs.cpSync(staticFolder, path.resolve(dir, 'static'), { recursive: true, force: true });
     }
 }

@@ -30,6 +30,7 @@
     "mime-types": "^3.0.1",
     "node-html-parser": "^7.0.1",
     "path-to-regexp": "^8.2.0",
+    "regexp.escape": "^2.0.1",
     "sass": "^1.91.0",
     "sass-embedded": "^1.91.0",
     "svelte": "^5.38.0",
@@ -38,7 +39,8 @@
   "type": "module",
   "devDependencies": {
     "@types/busboy": "^1.5.4",
-    "@types/jsesc": "^3.0.3"
+    "@types/jsesc": "^3.0.3",
+    "@types/regexp.escape": "^2.0.0"
   },
   "scripts": {
     "build": "tsc"
