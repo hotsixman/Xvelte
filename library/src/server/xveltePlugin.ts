@@ -1,21 +1,17 @@
 import type { Plugin } from "vite";
 import path from 'node:path';
-import { compile, compileModule, preprocess, type Preprocessor } from "svelte/compiler";
-import { createHash } from "node:crypto";
+import { compile, compileModule } from "svelte/compiler";
 import { build, type Plugin as EsbuildPlugin, type Loader, type PluginBuild } from "esbuild";
 import fs, { read } from "node:fs";
 import { XvelteApp } from "./XvelteApp.js";
 import * as sass from 'sass';
 import regexpEscape from 'regexp.escape'
+import { generateHash } from "./utils.js";
 /**
  * @todo 개발서버 일 때, client 컴포넌트들을 별도의 폴더에 번들링하여 저장해놓기
  * @returns 
  */
 export default function xveltePlugin(): Plugin {
-    function generateHash(text: string) {
-        return createHash('sha-256').update(text).digest('hex');
-    }
-
     const clientSvelteFilePaths = new Set<string>();
     let isDev = false;
     let devFileChanged = true;

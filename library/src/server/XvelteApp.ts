@@ -10,8 +10,8 @@ import mime from 'mime-types'
 import pathToRegexp from "path-to-regexp";
 import cookie from 'cookie';
 import type { PageHandler, IncomingMessage, PageHandleData, EndpointHandler, AnyPageHandler, AnyEndpointHandler, RouteParams, XvelteResponse, AnyRequestEvent, RequestMethod, XvelteHook, MaybePromise } from "./types.js";
-import { hash } from "node:crypto";
-import type { RenderingData } from "../types.js";
+import { hash, randomUUID } from "node:crypto";
+import type { NavigationResponse, RenderingData } from "../types.js";
 import * as devalue from 'devalue';
 import Busboy from 'busboy';
 
@@ -424,14 +424,14 @@ export class XvelteApp {
      */
     private async getPageResponse(event: AnyRequestEvent, handler: AnyPageHandler): Promise<XvelteResponse> {
         const pageHandleData = await handler(event);
-        if (typeof (pageHandleData) === "string") {
-            return pageHandleData;
-        }
         if (!pageHandleData) {
             return null;
         }
 
-        const renderingData = await this.renderPage(pageHandleData);
+        const renderingData =
+            ("head" in pageHandleData && "body" in pageHandleData) ?
+                { layouts: [], page: { id: `random-${randomUUID()}`, head: pageHandleData.head, body: pageHandleData.body } } as RenderingData :
+                await this.renderPage(pageHandleData);
         const dom = parseHtml(this.template, { comment: true });
 
         const xvelteHead = dom.querySelector('xvelte-head');
@@ -509,20 +509,32 @@ export class XvelteApp {
         const to = new URL(to_, baseUrl);
 
         const { handler, params } = this.getPageHandler(to.pathname);
-        if (!handler) return false;
+        if (!handler){
+            event.status = 404;
+            return JSON.stringify({ layouts: [], page: { id: `random-${randomUUID()}`, head: '', body: '<h1>404 Error</h1>' } });
+        };
 
         event.url = to;
         RequestEvent.setParams(event, params);
-        const renderingData = await handler(event);
-        if (typeof (renderingData) === "string"){
-            event.status = 302;
-            event.setHeader('location', to.href);
-            return renderingData;
-        };
-        if (!renderingData) return null;
+        const pageHandleData = await handler(event);
+        if (!pageHandleData) return null;
 
-        const renderedData = await this.renderPage(renderingData);
-        return JSON.stringify(renderedData);
+        if(300 <= event.status && event.status < 400){
+            event.status = 200;
+            return JSON.stringify({
+                type: 'redirect',
+                location: RequestEvent.getResponseHeader(event).location ?? ''
+            } as NavigationResponse)
+        }
+
+        const renderingData =
+            ("head" in pageHandleData && "body" in pageHandleData) ?
+                { layouts: [], page: { id: `random-${randomUUID()}`, head: pageHandleData.head, body: pageHandleData.body } } as RenderingData :
+                await this.renderPage(pageHandleData);
+        return JSON.stringify({
+            type: 'page',
+            renderingData
+        } as NavigationResponse);
     }
 }
 
@@ -626,6 +638,15 @@ export class RequestEvent<Route extends string | RegExp> {
     }
     getClientAddress() {
         return this.requestHeaders['x-forwarded-for'] ?? this.request.socket.remoteAddress ?? '';
+    }
+    /**
+     * 리다이렉트 설정. `status`를 설정하지 않으면 302로 설정됩니다.
+     * @param location 
+     * @param status 
+     */
+    redirect(location: string | URL, status?: number){
+        this.status = status ?? 302;
+        this.setHeader('location', location instanceof URL ? location.href : location);
     }
     async text() {
         return (await this.requestData).toString();

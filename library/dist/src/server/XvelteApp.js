@@ -7,18 +7,61 @@ import path from "node:path";
 import mime from 'mime-types';
 import pathToRegexp from "path-to-regexp";
 import cookie from 'cookie';
-import { hash } from "node:crypto";
+import { hash, randomUUID } from "node:crypto";
 import * as devalue from 'devalue';
 import Busboy from 'busboy';
+const pageRoutesMap = new Map();
+const endpointRoutes = [];
+if (import.meta.env?.PROD) {
+    const routesDirPath = path.resolve(process.argv[1] ? path.dirname(process.argv[1]) : process.cwd(), 'routes').replaceAll('\\', '/');
+    const entries = fs.globSync(path.resolve(routesDirPath, '*.js'));
+    const rootRouterPath = path.resolve(routesDirPath, '..js');
+    if (fs.existsSync(rootRouterPath)) {
+        entries.unshift(path.resolve(routesDirPath, '..js'));
+    }
+    for (let entry of entries) {
+        entry = entry.replaceAll('\\', '/');
+        try {
+            const basename = path.basename(entry).replace(/\.(.*)js$/, '');
+            const module = await import(/* @vite-ignore */ `file://${path.resolve(routesDirPath, `${encodeURIComponent(basename) || '.'}.js`)}`);
+            const route = toRoutePath('/' + decodeURIComponent(basename));
+            if ("page" in module) {
+                pageRoutesMap.set(route, module.page);
+            }
+            ['get', 'post', 'put', 'delete', 'all'].forEach((method) => {
+                if (method in module) {
+                    endpointRoutes.push([route, method, module.get]);
+                }
+            });
+        }
+        catch (err) {
+            console.log(`${entry} is not a javascript module.`);
+        }
+    }
+    function toRoutePath(basename) {
+        return basename
+            .replace(/index$/, '') // index는 생략
+            .replace(/\[\.{3}.+\]/, '*') // [...all] -> *
+            .replace(/\[(.+?)\]/g, ':$1') // [id] -> :id
+            .replace(/\/+/g, '/');
+    }
+}
 export class XvelteApp {
     template;
     pageHandlerMap = new Map();
     pagePatternHandlerMap = new Map();
     endpointHandlerManager = new EndpointHandlerManager();
+    allHandlers = [];
     componentIdMap = new ComponentIdMap();
     hookFunction;
     constructor(template) {
         this.template = template;
+        pageRoutesMap.forEach((handler, route) => {
+            this.page(route, handler);
+        });
+        endpointRoutes.forEach(([route, method, handler]) => {
+            this[method](route, handler);
+        });
     }
     /**
      * 페이지 핸들러 추가
@@ -26,6 +69,7 @@ export class XvelteApp {
      * @param handler
      */
     page(route, handler) {
+        this.allHandlers.push(['page', route, handler]);
         if (typeof (route) === "string") {
             const route_ = pathify(route);
             const pathRegexp = pathToRegexp.pathToRegexp(route_);
@@ -42,22 +86,27 @@ export class XvelteApp {
     }
     /** Get 엔드포인트 핸들러 추가 */
     get(route, handler) {
+        this.allHandlers.push(['endpoint', route, 'get', handler]);
         this.endpointHandlerManager.set(route, 'get', handler);
     }
     /** Post 엔드포인트 핸들러 추가 */
     post(route, handler) {
+        this.allHandlers.push(['endpoint', route, 'post', handler]);
         this.endpointHandlerManager.set(route, 'post', handler);
     }
     /** Put 엔드포인트 핸들러 추가 */
     put(route, handler) {
+        this.allHandlers.push(['endpoint', route, 'put', handler]);
         this.endpointHandlerManager.set(route, 'put', handler);
     }
     /** Delete 엔드포인트 핸들러 추가 */
     delete(route, handler) {
+        this.allHandlers.push(['endpoint', route, 'delete', handler]);
         this.endpointHandlerManager.set(route, 'delete', handler);
     }
     /** 엔드포인트 핸들러 추가 */
     all(route, handler) {
+        this.allHandlers.push(['endpoint', route, 'all', handler]);
         this.endpointHandlerManager.set(route, 'all', handler);
     }
     /**
@@ -68,7 +117,9 @@ export class XvelteApp {
     }
     get handler() {
         const THIS = this;
-        return THIS.handle.bind(THIS);
+        const handler = THIS.handle.bind(THIS);
+        Object.defineProperty(handler, "app", { value: THIS, writable: false });
+        return handler;
     }
     /**
      * HTTP 요청 핸들러. Node http 모듈, Express 등에서 사용 가능.
@@ -107,7 +158,7 @@ export class XvelteApp {
             }
             const staticPath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), 'static');
             const filePath = path.join(staticPath, event.url.pathname);
-            if (fs.existsSync(filePath)) {
+            if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
                 const mimeType = mime.contentType(path.basename(filePath));
                 if (mimeType) {
                     event.setHeader('content-type', mimeType);
@@ -330,7 +381,9 @@ export class XvelteApp {
         if (!pageHandleData) {
             return null;
         }
-        const renderingData = await this.renderPage(pageHandleData);
+        const renderingData = ("head" in pageHandleData && "body" in pageHandleData) ?
+            { layouts: [], page: { id: `random-${randomUUID()}`, head: pageHandleData.head, body: pageHandleData.body } } :
+            await this.renderPage(pageHandleData);
         const dom = parseHtml(this.template, { comment: true });
         const xvelteHead = dom.querySelector('xvelte-head');
         if (xvelteHead) {
@@ -402,15 +455,30 @@ export class XvelteApp {
             event.requestHeaders.host ? `http://${event.requestHeaders.host}` : 'http://localhost';
         const to = new URL(to_, baseUrl);
         const { handler, params } = this.getPageHandler(to.pathname);
-        if (!handler)
-            return false;
+        if (!handler) {
+            event.status = 404;
+            return JSON.stringify({ layouts: [], page: { id: `random-${randomUUID()}`, head: '', body: '<h1>404 Error</h1>' } });
+        }
+        ;
         event.url = to;
         RequestEvent.setParams(event, params);
-        const renderingData = await handler(event);
-        if (!renderingData)
+        const pageHandleData = await handler(event);
+        if (!pageHandleData)
             return null;
-        const renderedData = await this.renderPage(renderingData);
-        return JSON.stringify(renderedData);
+        if (300 <= event.status && event.status < 400) {
+            event.status = 200;
+            return JSON.stringify({
+                type: 'redirect',
+                location: RequestEvent.getResponseHeader(event).location ?? ''
+            });
+        }
+        const renderingData = ("head" in pageHandleData && "body" in pageHandleData) ?
+            { layouts: [], page: { id: `random-${randomUUID()}`, head: pageHandleData.head, body: pageHandleData.body } } :
+            await this.renderPage(pageHandleData);
+        return JSON.stringify({
+            type: 'page',
+            renderingData
+        });
     }
 }
 (function (XvelteApp) {
@@ -502,6 +570,15 @@ export class RequestEvent {
     }
     getClientAddress() {
         return this.requestHeaders['x-forwarded-for'] ?? this.request.socket.remoteAddress ?? '';
+    }
+    /**
+     * 리다이렉트 설정. `status`를 설정하지 않으면 302로 설정됩니다.
+     * @param location
+     * @param status
+     */
+    redirect(location, status) {
+        this.status = status ?? 302;
+        this.setHeader('location', location instanceof URL ? location.href : location);
     }
     async text() {
         return (await this.requestData).toString();

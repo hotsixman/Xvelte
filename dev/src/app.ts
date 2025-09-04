@@ -24,8 +24,9 @@ app.page('/about', () => ({
 }))
 
 app.page('/testpage', (event) => {
-    event.status = 400;
-    return 'hahaha';
+    event.status = 302;
+    event.setHeader('location', '/about');
+    return {head: '', body: 'hahaha'};
 })
 
 app.get('/test', async (event) => {

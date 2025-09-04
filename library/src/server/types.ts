@@ -8,7 +8,7 @@ export type AnyEndpointHandler = EndpointHandler<any>;
 
 export type AnyRequestEvent = RequestEvent<any>;
 
-export type PageHandler<Route extends string | RegExp = any, Props extends Record<string, any> = any, LayoutProps extends Record<string, any>[] = any> = (event: RequestEvent<Route>) => MaybePromise<PageHandleData<Props, LayoutProps> | null | string>;
+export type PageHandler<Route extends string | RegExp = any, Props extends Record<string, any> = any, LayoutProps extends Record<string, any>[] = any> = (event: RequestEvent<Route>) => MaybePromise<PageHandleData<Props, LayoutProps> | null | HTML>;
 export type AnyPageHandler = PageHandler<any, any, any>;
 export type PageHandleData<Props extends Record<string, any>, LayoutProps extends Record<string, any>[]> = {
     layouts?: {
@@ -46,3 +46,5 @@ export type IncomingMessage = IncomingMessage_ & { url: string };
 export type MaybePromise<T> = T | Promise<T>;
 
 export type XvelteHook = (event: AnyRequestEvent) => MaybePromise<AnyRequestEvent | XvelteResponse>;
+
+export type HTML = {head: string, body: string};

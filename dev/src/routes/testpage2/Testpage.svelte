@@ -7,3 +7,4 @@
 </script>
 
 test: {param}
+<a href="//naver.com">네이버</a>

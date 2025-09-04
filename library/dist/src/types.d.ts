@@ -12,3 +12,10 @@ export type RenderingDataElement = {
 export type XveltePluginOption = {
     staticPath: string;
 };
+export type NavigationResponse = {
+    type: 'page';
+    renderingData: RenderingData;
+} | {
+    type: 'redirect';
+    location: string;
+};

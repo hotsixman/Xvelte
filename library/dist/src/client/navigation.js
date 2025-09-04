@@ -7,9 +7,40 @@ export async function goto(to, option) {
     const fragManager = window.__xvelte__.fragManager;
     await fragManager.ready;
     to = pathToUrl(to);
+    if (to instanceof URL && to.origin !== location.origin) {
+        location.href = to.href;
+        return;
+    }
     setNavigatingStore(to);
     const renderingDataRequestUrl = getRenderingDataRequestUrl(to);
-    const renderingData = await fetch(renderingDataRequestUrl).then((res) => res.json());
+    try {
+        var response = await fetch(renderingDataRequestUrl);
+    }
+    catch (err) {
+        navigationEnded();
+        throw err;
+    }
+    /*
+    console.log(response);
+    if ((300 <= response.status && response.status < 400) || response.type === "opaqueredirect") {
+        navigationEnded();
+        const location = response.headers.get('location');
+        console.log(response.);
+        if (!location) {
+            return;
+        }
+        return await goto(location);
+    }
+    */
+    const navigationResponse = await response.json();
+    if (navigationResponse.type === "redirect") {
+        const location = navigationResponse.location;
+        if (!location) {
+            return navigationEnded();
+        }
+        return await goto(location);
+    }
+    const { renderingData } = navigationResponse;
     const renderingDataElements = [...renderingData.layouts, renderingData.page];
     const diffrentFrom = findDifferentIndex(renderingDataElements, fragManager);
     const replacedFrag = getReplacedFragment(fragManager, diffrentFrom);
@@ -39,7 +70,7 @@ export async function goto(to, option) {
 }
 export function addAnchorClickHandler() {
     document.addEventListener('click', (event) => {
-        if (event.target && event.target instanceof HTMLAnchorElement && event.target.origin === location.origin && (!event.target.target || event.target.target === "_self")) {
+        if (event.target && event.target instanceof HTMLAnchorElement && event.target.origin === location.origin && event.target.getAttribute('xvelte-disable-spa') === null && (!event.target.target || event.target.target === "_self")) {
             event.preventDefault();
             goto(event.target.href);
         }

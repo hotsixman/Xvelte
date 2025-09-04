@@ -1,11 +1,12 @@
 import { type ServerResponse } from "node:http";
 import cookie from 'cookie';
-import type { PageHandler, IncomingMessage, EndpointHandler, RouteParams, AnyRequestEvent, XvelteHook } from "./types.js";
+import type { PageHandler, IncomingMessage, EndpointHandler, AnyPageHandler, AnyEndpointHandler, RouteParams, AnyRequestEvent, XvelteHook } from "./types.js";
 export declare class XvelteApp {
     private template;
     private pageHandlerMap;
     private pagePatternHandlerMap;
     private endpointHandlerManager;
+    allHandlers: (['page', string | RegExp, AnyPageHandler] | ['endpoint', string | RegExp, 'get' | 'post' | 'put' | 'delete' | 'all', AnyEndpointHandler])[];
     private componentIdMap;
     private hookFunction?;
     constructor(template: string);
@@ -29,7 +30,9 @@ export declare class XvelteApp {
      * hook 설정
      */
     hook(xvelteHook: XvelteHook): void;
-    get handler(): (req: IncomingMessage, res: ServerResponse) => Promise<boolean | ServerResponse<import("http").IncomingMessage> | undefined>;
+    get handler(): (XvelteApp["handle"] & {
+        app: XvelteApp;
+    });
     /**
      * HTTP 요청 핸들러. Node http 모듈, Express 등에서 사용 가능.
      * @param req
@@ -109,6 +112,12 @@ export declare class RequestEvent<Route extends string | RegExp> {
     constructor(req: IncomingMessage, res: ServerResponse);
     setHeader(key: string, value: string | number | string[]): void;
     getClientAddress(): string;
+    /**
+     * 리다이렉트 설정. `status`를 설정하지 않으면 302로 설정됩니다.
+     * @param location
+     * @param status
+     */
+    redirect(location: string | URL, status?: number): void;
     text(): Promise<string>;
     json(): Promise<any>;
     blob(): Promise<Blob>;
