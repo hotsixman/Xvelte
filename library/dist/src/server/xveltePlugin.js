@@ -51,7 +51,7 @@ export default function xveltePlugin() {
                                     if (p.name === 'app') {
                                         return 'app.js';
                                     }
-                                    let name = (p.facadeModuleId ?? p.moduleIds[0]);
+                                    let name = (p.facadeModuleId ?? p.moduleIds[0]).replaceAll('\\', '/');
                                     name = path.dirname(name.slice(name.indexOf('src/routes/') + 11)) + '.js';
                                     return 'routes/' + encodeURIComponent(name);
                                 },
