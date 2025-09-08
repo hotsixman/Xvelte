@@ -20,7 +20,7 @@ console.log('Copying project files...');
 fs.cpSync(path.resolve(import.meta.dirname, 'template'), projectPath, { recursive: true, force: true });
 
 console.log("Installing packages...");
-execSync("npm install", { cwd: projectPath });
+execSync("npm install @hotsixman/xvelte", { cwd: projectPath });
 
 console.log('Complete!');
 process.exit();

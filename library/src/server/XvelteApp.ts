@@ -30,7 +30,7 @@ export class XvelteApp {
     private hookFunction?: XvelteHook;
     private usingFileBaseRouter: boolean = false;
 
-    get dev(): "true" | undefined {
+    protected get dev(): "true" | undefined {
         return undefined;
     }
 

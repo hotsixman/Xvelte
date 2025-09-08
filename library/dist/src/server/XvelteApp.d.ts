@@ -10,7 +10,7 @@ export declare class XvelteApp {
     private componentIdMap;
     private hookFunction?;
     private usingFileBaseRouter;
-    get dev(): "true" | undefined;
+    protected get dev(): "true" | undefined;
     constructor(template: string);
     /**
      * 페이지 핸들러 추가

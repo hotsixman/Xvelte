@@ -39,8 +39,12 @@ export default function xveltePlugin(): Plugin {
                 const appJsPath = fs.existsSync('src/app.js') ? 'src/app.js' : 'src/app.ts';
                 return {
                     ...config,
+                    esbuild: {
+                        target: 'esnext'
+                    },
                     build: {
                         ssr: true,
+                        target: 'esnext',
                         rollupOptions: {
                             input: {
                                 'app': appJsPath,
@@ -206,7 +210,7 @@ export default function xveltePlugin(): Plugin {
         const cssContents: [string, string][] = [];
         const result = await build({
             format: 'esm',
-            platform: 'browser',
+            platform: 'node',
             bundle: true,
             write: false,
             outdir: path.resolve(process.cwd(), '__xvelte__', 'server', 'css'),
@@ -456,8 +460,8 @@ export default function xveltePlugin(): Plugin {
 }
 
 class XvelteDevApp extends XvelteApp {
-    get dev() {
-        return "true" as const;
+    protected get dev(): "true" {
+        return "true";
     }
 
     constructor(template: string) {
