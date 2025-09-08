@@ -9,6 +9,8 @@ export declare class XvelteApp {
     allHandlers: (['page', string | RegExp, AnyPageHandler] | ['endpoint', string | RegExp, 'get' | 'post' | 'put' | 'delete' | 'all', AnyEndpointHandler])[];
     private componentIdMap;
     private hookFunction?;
+    private usingFileBaseRouter;
+    get dev(): "true" | undefined;
     constructor(template: string);
     /**
      * 페이지 핸들러 추가
@@ -30,6 +32,7 @@ export declare class XvelteApp {
      * hook 설정
      */
     hook(xvelteHook: XvelteHook): void;
+    useFileBaseRouter(): Promise<void>;
     get handler(): (XvelteApp["handle"] & {
         app: XvelteApp;
     });
@@ -86,6 +89,7 @@ export declare class XvelteApp {
 export declare namespace XvelteApp {
     const css = "xvelte-body, xvelte-island, xvelte-frag{display:contents;}";
     function sequence(...hooks: XvelteHook[]): XvelteHook;
+    function isUsingFileBaseRouter(app: XvelteApp): boolean;
 }
 export declare class RequestEvent<Route extends string | RegExp> {
     url: URL;

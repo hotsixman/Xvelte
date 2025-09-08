@@ -6,6 +6,10 @@ import AboutPage from "./page/about/page.svelte";
 
 const app = new XvelteApp(template);
 
+await app.useFileBaseRouter();
+
+let count = 0;
+
 app.page('/', () => {
     return {
         layouts: [{
@@ -34,6 +38,11 @@ app.get('/test', async (event) => {
     console.log(formData);
     return null;
 });
+
+app.get('/count', () => {
+    count++;
+    return count.toString();
+})
 
 app.hook(XvelteApp.sequence(
     (event) => {

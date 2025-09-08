@@ -10,42 +10,8 @@ import cookie from 'cookie';
 import { hash, randomUUID } from "node:crypto";
 import * as devalue from 'devalue';
 import Busboy from 'busboy';
-const pageRoutesMap = new Map();
-const endpointRoutes = [];
-if (import.meta.env?.PROD) {
-    const routesDirPath = path.resolve(process.argv[1] ? path.dirname(process.argv[1]) : process.cwd(), 'routes').replaceAll('\\', '/');
-    const entries = fs.globSync(path.resolve(routesDirPath, '*.js'));
-    const rootRouterPath = path.resolve(routesDirPath, '..js');
-    if (fs.existsSync(rootRouterPath)) {
-        entries.unshift(path.resolve(routesDirPath, '..js'));
-    }
-    for (let entry of entries) {
-        entry = entry.replaceAll('\\', '/');
-        try {
-            const basename = path.basename(entry).replace(/\.(.*)js$/, '');
-            const module = await import(/* @vite-ignore */ `file://${path.resolve(routesDirPath, `${encodeURIComponent(basename) || '.'}.js`)}`);
-            const route = toRoutePath('/' + decodeURIComponent(basename));
-            if ("page" in module) {
-                pageRoutesMap.set(route, module.page);
-            }
-            ['get', 'post', 'put', 'delete', 'all'].forEach((method) => {
-                if (method in module) {
-                    endpointRoutes.push([route, method, module.get]);
-                }
-            });
-        }
-        catch (err) {
-            console.log(`${entry} is not a javascript module.`);
-        }
-    }
-    function toRoutePath(basename) {
-        return basename
-            .replace(/index$/, '') // index는 생략
-            .replace(/\[\.{3}.+\]/, '*') // [...all] -> *
-            .replace(/\[(.+?)\]/g, ':$1') // [id] -> :id
-            .replace(/\/+/g, '/');
-    }
-}
+//const pageRoutesMap = new Map<string, AnyPageHandler>();
+//const endpointRoutes: [string, 'get' | 'post' | 'put' | 'delete' | 'all', AnyEndpointHandler][] = [];
 export class XvelteApp {
     template;
     pageHandlerMap = new Map();
@@ -54,14 +20,12 @@ export class XvelteApp {
     allHandlers = [];
     componentIdMap = new ComponentIdMap();
     hookFunction;
+    usingFileBaseRouter = false;
+    get dev() {
+        return undefined;
+    }
     constructor(template) {
         this.template = template;
-        pageRoutesMap.forEach((handler, route) => {
-            this.page(route, handler);
-        });
-        endpointRoutes.forEach(([route, method, handler]) => {
-            this[method](route, handler);
-        });
     }
     /**
      * 페이지 핸들러 추가
@@ -115,6 +79,43 @@ export class XvelteApp {
     hook(xvelteHook) {
         this.hookFunction = xvelteHook;
     }
+    async useFileBaseRouter() {
+        if (!this.dev) {
+            const routesDirPath = path.resolve(process.argv[1] ? path.dirname(process.argv[1]) : process.cwd(), 'routes').replaceAll('\\', '/');
+            const entries = fs.globSync(path.resolve(routesDirPath, '*.js'));
+            const rootRouterPath = path.resolve(routesDirPath, '..js');
+            if (fs.existsSync(rootRouterPath)) {
+                entries.unshift(path.resolve(routesDirPath, '..js'));
+            }
+            for (let entry of entries) {
+                entry = entry.replaceAll('\\', '/');
+                try {
+                    const basename = path.basename(entry).replace(/\.(.*)js$/, '');
+                    const module = await import(/* @vite-ignore */ `file://${path.resolve(routesDirPath, `${encodeURIComponent(basename) || '.'}.js`)}`);
+                    const route = toRoutePath('/' + decodeURIComponent(basename));
+                    if ("page" in module) {
+                        this.page(route, module.page);
+                    }
+                    ['get', 'post', 'put', 'delete', 'all'].forEach((method) => {
+                        if (method in module) {
+                            this[method](route, module[method]);
+                        }
+                    });
+                }
+                catch (err) {
+                    console.log(`${entry} is not a javascript module.`);
+                }
+            }
+            function toRoutePath(basename) {
+                return basename
+                    .replace(/index$/, '') // index는 생략
+                    .replace(/\[\.{3}.+\]/, '*') // [...all] -> *
+                    .replace(/\[(.+?)\]/g, ':$1') // [id] -> :id
+                    .replace(/\/+/g, '/');
+            }
+        }
+        this.usingFileBaseRouter = true;
+    }
     get handler() {
         const THIS = this;
         const handler = THIS.handle.bind(THIS);
@@ -156,7 +157,7 @@ export class XvelteApp {
                 if (await this.sendResponse(event, response, res))
                     return;
             }
-            const staticPath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), 'static');
+            const staticPath = path.join(this.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), 'static');
             const filePath = path.join(staticPath, event.url.pathname);
             if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
                 const mimeType = mime.contentType(path.basename(filePath));
@@ -296,7 +297,7 @@ export class XvelteApp {
     */
     async getXvelteClientFileResponse(event) {
         if (event.url.pathname === '/__xvelte__/client' || event.url.pathname.startsWith('/__xvelte__/client/')) {
-            const filePath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), event.url.pathname);
+            const filePath = path.join(this.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), event.url.pathname);
             if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
                 event.status = 404;
                 return null;
@@ -316,7 +317,7 @@ export class XvelteApp {
     async renderPage(data) {
         const context = new Map();
         const layouts = await asyncMap(data.layouts ?? [], async (l) => {
-            const cssModulePath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), '__xvelte__', 'server', 'css', `${l.component.name}_css.js`);
+            const cssModulePath = path.join(this.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), '__xvelte__', 'server', 'css', `${l.component.name}_css.js`);
             let cssData = [];
             if (fs.existsSync(cssModulePath)) {
                 await import(/* @vite-ignore */ cssModulePath)
@@ -344,7 +345,7 @@ export class XvelteApp {
                 body: dom.innerHTML
             };
         });
-        const cssModulePath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), '__xvelte__', 'server', 'css', `${data.component.name}_css.js`);
+        const cssModulePath = path.join(this.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), '__xvelte__', 'server', 'css', `${data.component.name}_css.js`);
         let cssData = [];
         if (fs.existsSync(cssModulePath)) {
             await import(/* @vite-ignore */ cssModulePath)
@@ -388,7 +389,7 @@ export class XvelteApp {
         const xvelteHead = dom.querySelector('xvelte-head');
         if (xvelteHead) {
             const newXvelteHead = parseHtml('<!--xvelte-head-->', { comment: true });
-            if (process.env.dev) {
+            if (this.dev) {
                 newXvelteHead.innerHTML += '<script type="module" src="/@vite/client"></script>';
             }
             newXvelteHead.innerHTML += `<style>${XvelteApp.css}</style>`;
@@ -498,6 +499,11 @@ export class XvelteApp {
         };
     }
     XvelteApp.sequence = sequence;
+    function isUsingFileBaseRouter(app) {
+        //@ts-expect-error
+        return app.usingFileBaseRouter;
+    }
+    XvelteApp.isUsingFileBaseRouter = isUsingFileBaseRouter;
 })(XvelteApp || (XvelteApp = {}));
 class ComponentIdMap {
     map = new Map();

@@ -15,46 +15,8 @@ import type { NavigationResponse, RenderingData } from "../types.js";
 import * as devalue from 'devalue';
 import Busboy from 'busboy';
 
-const pageRoutesMap = new Map<string, AnyPageHandler>();
-const endpointRoutes: [string, 'get' | 'post' | 'put' | 'delete' | 'all', AnyEndpointHandler][] = [];
-
-if (import.meta.env?.PROD) {
-    const routesDirPath = path.resolve(process.argv[1] ? path.dirname(process.argv[1]) : process.cwd(), 'routes').replaceAll('\\', '/');
-    const entries = fs.globSync(path.resolve(routesDirPath, '*.js'));
-
-    const rootRouterPath = path.resolve(routesDirPath, '..js');
-    if (fs.existsSync(rootRouterPath)) {
-        entries.unshift(path.resolve(routesDirPath, '..js'));
-    }
-
-    for (let entry of entries) {
-        entry = entry.replaceAll('\\', '/');
-        try {
-            const basename = path.basename(entry).replace(/\.(.*)js$/, '');
-            const module = await import(/* @vite-ignore */`file://${path.resolve(routesDirPath, `${encodeURIComponent(basename) || '.'}.js`)}`);
-            const route = toRoutePath('/' + decodeURIComponent(basename));
-            if ("page" in module) {
-                pageRoutesMap.set(route, module.page);
-            }
-            (['get', 'post', 'put', 'delete', 'all'] as const).forEach((method) => {
-                if (method in module) {
-                    endpointRoutes.push([route, method, module.get])
-                }
-            })
-        }
-        catch (err) {
-            console.log(`${entry} is not a javascript module.`);
-        }
-    }
-
-    function toRoutePath(basename: string) {
-        return basename
-            .replace(/index$/, '')        // index는 생략
-            .replace(/\[\.{3}.+\]/, '*')  // [...all] -> *
-            .replace(/\[(.+?)\]/g, ':$1') // [id] -> :id
-            .replace(/\/+/g, '/');
-    }
-}
+//const pageRoutesMap = new Map<string, AnyPageHandler>();
+//const endpointRoutes: [string, 'get' | 'post' | 'put' | 'delete' | 'all', AnyEndpointHandler][] = [];
 
 export class XvelteApp {
     private template: string;
@@ -65,17 +27,15 @@ export class XvelteApp {
     allHandlers: (['page', string | RegExp, AnyPageHandler] | ['endpoint', string | RegExp, 'get' | 'post' | 'put' | 'delete' | 'all', AnyEndpointHandler])[] = [];
 
     private componentIdMap = new ComponentIdMap();
-
     private hookFunction?: XvelteHook;
+    private usingFileBaseRouter: boolean = false;
+
+    get dev(): "true" | undefined {
+        return undefined;
+    }
 
     constructor(template: string) {
         this.template = template;
-        pageRoutesMap.forEach((handler, route) => {
-            this.page(route, handler);
-        });
-        endpointRoutes.forEach(([route, method, handler]) => {
-            this[method](route, handler);
-        })
     }
 
     /**
@@ -134,6 +94,47 @@ export class XvelteApp {
         this.hookFunction = xvelteHook;
     }
 
+    async useFileBaseRouter() {
+        if (!this.dev) {
+            const routesDirPath = path.resolve(process.argv[1] ? path.dirname(process.argv[1]) : process.cwd(), 'routes').replaceAll('\\', '/');
+            const entries = fs.globSync(path.resolve(routesDirPath, '*.js'));
+
+            const rootRouterPath = path.resolve(routesDirPath, '..js');
+            if (fs.existsSync(rootRouterPath)) {
+                entries.unshift(path.resolve(routesDirPath, '..js'));
+            }
+
+            for (let entry of entries) {
+                entry = entry.replaceAll('\\', '/');
+                try {
+                    const basename = path.basename(entry).replace(/\.(.*)js$/, '');
+                    const module = await import(/* @vite-ignore */`file://${path.resolve(routesDirPath, `${encodeURIComponent(basename) || '.'}.js`)}`);
+                    const route = toRoutePath('/' + decodeURIComponent(basename));
+                    if ("page" in module) {
+                        this.page(route, module.page)
+                    }
+                    (['get', 'post', 'put', 'delete', 'all'] as const).forEach((method) => {
+                        if (method in module) {
+                            this[method](route, module[method]);
+                        }
+                    })
+                }
+                catch (err) {
+                    console.log(`${entry} is not a javascript module.`);
+                }
+            }
+
+            function toRoutePath(basename: string) {
+                return basename
+                    .replace(/index$/, '')        // index는 생략
+                    .replace(/\[\.{3}.+\]/, '*')  // [...all] -> *
+                    .replace(/\[(.+?)\]/g, ':$1') // [id] -> :id
+                    .replace(/\/+/g, '/');
+            }
+        }
+        this.usingFileBaseRouter = true;
+    }
+
     get handler() {
         const THIS = this;
         const handler = THIS.handle.bind(THIS);
@@ -178,7 +179,7 @@ export class XvelteApp {
                 if (await this.sendResponse(event, response, res)) return;
             }
 
-            const staticPath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), 'static');
+            const staticPath = path.join(this.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), 'static');
             const filePath = path.join(staticPath, event.url.pathname);
 
             if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
@@ -333,7 +334,7 @@ export class XvelteApp {
     */
     private async getXvelteClientFileResponse(event: AnyRequestEvent): Promise<XvelteResponse> {
         if (event.url.pathname === '/__xvelte__/client' || event.url.pathname.startsWith('/__xvelte__/client/')) {
-            const filePath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), event.url.pathname);
+            const filePath = path.join(this.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), event.url.pathname);
             if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
                 event.status = 404;
                 return null;
@@ -356,7 +357,7 @@ export class XvelteApp {
         const context = new Map<string, any>();
 
         const layouts = await asyncMap(data.layouts ?? [], async (l) => {
-            const cssModulePath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), '__xvelte__', 'server', 'css', `${l.component.name}_css.js`);
+            const cssModulePath = path.join(this.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), '__xvelte__', 'server', 'css', `${l.component.name}_css.js`);
             let cssData: string[] = [];
             if (fs.existsSync(cssModulePath)) {
                 await import(/* @vite-ignore */ cssModulePath)
@@ -388,7 +389,7 @@ export class XvelteApp {
             }
         });
 
-        const cssModulePath = path.join(process.env.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), '__xvelte__', 'server', 'css', `${data.component.name}_css.js`);
+        const cssModulePath = path.join(this.dev ? process.cwd() : (process.argv[1] ? path.dirname(process.argv[1]) : process.cwd()), '__xvelte__', 'server', 'css', `${data.component.name}_css.js`);
         let cssData: string[] = [];
         if (fs.existsSync(cssModulePath)) {
             await import(/* @vite-ignore */ cssModulePath)
@@ -437,7 +438,7 @@ export class XvelteApp {
         const xvelteHead = dom.querySelector('xvelte-head');
         if (xvelteHead) {
             const newXvelteHead = parseHtml('<!--xvelte-head-->', { comment: true });
-            if (process.env.dev) {
+            if (this.dev) {
                 newXvelteHead.innerHTML += '<script type="module" src="/@vite/client"></script>';
             }
             newXvelteHead.innerHTML += `<style>${XvelteApp.css}</style>`;
@@ -509,7 +510,7 @@ export class XvelteApp {
         const to = new URL(to_, baseUrl);
 
         const { handler, params } = this.getPageHandler(to.pathname);
-        if (!handler){
+        if (!handler) {
             event.status = 404;
             return JSON.stringify({ layouts: [], page: { id: `random-${randomUUID()}`, head: '', body: '<h1>404 Error</h1>' } });
         };
@@ -519,7 +520,7 @@ export class XvelteApp {
         const pageHandleData = await handler(event);
         if (!pageHandleData) return null;
 
-        if(300 <= event.status && event.status < 400){
+        if (300 <= event.status && event.status < 400) {
             event.status = 200;
             return JSON.stringify({
                 type: 'redirect',
@@ -553,6 +554,10 @@ export namespace XvelteApp {
             }
             return event;
         }
+    }
+    export function isUsingFileBaseRouter(app: XvelteApp) {
+        //@ts-expect-error
+        return app.usingFileBaseRouter;
     }
 }
 
@@ -644,7 +649,7 @@ export class RequestEvent<Route extends string | RegExp> {
      * @param location 
      * @param status 
      */
-    redirect(location: string | URL, status?: number){
+    redirect(location: string | URL, status?: number) {
         this.status = status ?? 302;
         this.setHeader('location', location instanceof URL ? location.href : location);
     }

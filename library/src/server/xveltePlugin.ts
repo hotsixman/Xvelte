@@ -132,24 +132,26 @@ export default function xveltePlugin(): Plugin {
                     else {
                         const app = await server.ssrLoadModule(path.resolve(process.cwd(), 'src/app')).then((module) => module.default.app as XvelteApp);
                         //@ts-expect-error
-                        const devApp = new XvelteApp(app.template);
-                        const fileRouterDirPath = path.resolve(process.cwd(), 'src', 'routes').replaceAll('\\', '/');
-                        for (let entry of fs.globSync(path.join(fileRouterDirPath, '**/+server.{js,ts}'))) {
-                            entry = entry.replaceAll('\\', '/');
-                            try {
-                                const module = await server.ssrLoadModule(entry);
-                                const route = toRoutePath(path.dirname(entry.replace(new RegExp(`^${regexpEscape(fileRouterDirPath)}`), '')));
-                                if ("page" in module) {
-                                    devApp.page(route, module.page);
-                                }
-                                (['get', 'post', 'put', 'delete', 'all'] as const).forEach((method) => {
-                                    if (method in module) {
-                                        devApp[method](route, module[method]);
+                        const devApp = new XvelteDevApp(app.template);
+                        if (XvelteApp.isUsingFileBaseRouter(app)) {
+                            const fileRouterDirPath = path.resolve(process.cwd(), 'src', 'routes').replaceAll('\\', '/');
+                            for (let entry of fs.globSync(path.join(fileRouterDirPath, '**/+server.{js,ts}'))) {
+                                entry = entry.replaceAll('\\', '/');
+                                try {
+                                    const module = await server.ssrLoadModule(entry);
+                                    const route = toRoutePath(path.dirname(entry.replace(new RegExp(`^${regexpEscape(fileRouterDirPath)}`), '')));
+                                    if ("page" in module) {
+                                        devApp.page(route, module.page);
                                     }
-                                })
-                            }
-                            catch (err) {
-                                console.log(`${entry} is not a javascript module.`);
+                                    (['get', 'post', 'put', 'delete', 'all'] as const).forEach((method) => {
+                                        if (method in module) {
+                                            devApp[method](route, module[method]);
+                                        }
+                                    })
+                                }
+                                catch (err) {
+                                    console.log(`${entry} is not a javascript module.`);
+                                }
                             }
                         }
 
@@ -450,5 +452,15 @@ export default function xveltePlugin(): Plugin {
         if (!fs.existsSync(staticFolder)) return;
 
         fs.cpSync(staticFolder, path.resolve(dir, 'static'), { recursive: true, force: true });
+    }
+}
+
+class XvelteDevApp extends XvelteApp {
+    get dev() {
+        return "true" as const;
+    }
+
+    constructor(template: string) {
+        super(template);
     }
 }

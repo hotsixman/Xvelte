@@ -128,24 +128,26 @@ export default function xveltePlugin() {
                     else {
                         const app = await server.ssrLoadModule(path.resolve(process.cwd(), 'src/app')).then((module) => module.default.app);
                         //@ts-expect-error
-                        const devApp = new XvelteApp(app.template);
-                        const fileRouterDirPath = path.resolve(process.cwd(), 'src', 'routes').replaceAll('\\', '/');
-                        for (let entry of fs.globSync(path.join(fileRouterDirPath, '**/+server.{js,ts}'))) {
-                            entry = entry.replaceAll('\\', '/');
-                            try {
-                                const module = await server.ssrLoadModule(entry);
-                                const route = toRoutePath(path.dirname(entry.replace(new RegExp(`^${regexpEscape(fileRouterDirPath)}`), '')));
-                                if ("page" in module) {
-                                    devApp.page(route, module.page);
-                                }
-                                ['get', 'post', 'put', 'delete', 'all'].forEach((method) => {
-                                    if (method in module) {
-                                        devApp[method](route, module[method]);
+                        const devApp = new XvelteDevApp(app.template);
+                        if (XvelteApp.isUsingFileBaseRouter(app)) {
+                            const fileRouterDirPath = path.resolve(process.cwd(), 'src', 'routes').replaceAll('\\', '/');
+                            for (let entry of fs.globSync(path.join(fileRouterDirPath, '**/+server.{js,ts}'))) {
+                                entry = entry.replaceAll('\\', '/');
+                                try {
+                                    const module = await server.ssrLoadModule(entry);
+                                    const route = toRoutePath(path.dirname(entry.replace(new RegExp(`^${regexpEscape(fileRouterDirPath)}`), '')));
+                                    if ("page" in module) {
+                                        devApp.page(route, module.page);
                                     }
-                                });
-                            }
-                            catch (err) {
-                                console.log(`${entry} is not a javascript module.`);
+                                    ['get', 'post', 'put', 'delete', 'all'].forEach((method) => {
+                                        if (method in module) {
+                                            devApp[method](route, module[method]);
+                                        }
+                                    });
+                                }
+                                catch (err) {
+                                    console.log(`${entry} is not a javascript module.`);
+                                }
                             }
                         }
                         app.allHandlers.forEach((value) => {
@@ -424,6 +426,14 @@ export default function xveltePlugin() {
         if (!fs.existsSync(staticFolder))
             return;
         fs.cpSync(staticFolder, path.resolve(dir, 'static'), { recursive: true, force: true });
+    }
+}
+class XvelteDevApp extends XvelteApp {
+    get dev() {
+        return "true";
+    }
+    constructor(template) {
+        super(template);
     }
 }
 //# sourceMappingURL=xveltePlugin.js.map
