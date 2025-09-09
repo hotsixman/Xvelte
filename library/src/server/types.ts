@@ -6,6 +6,7 @@ import type { ReadStream } from "node:fs";
 export type EndpointHandler<Route extends string | RegExp> = (event: RequestEvent<Route>) => MaybePromise<XvelteResponse | null>;
 export type AnyEndpointHandler = EndpointHandler<any>;
 
+export type { RequestEvent };
 export type AnyRequestEvent = RequestEvent<any>;
 
 export type PageHandler<Route extends string | RegExp = any, Props extends Record<string, any> = any, LayoutProps extends Record<string, any>[] = any> = (event: RequestEvent<Route>) => MaybePromise<PageHandleData<Props, LayoutProps> | null | HTML>;
@@ -35,16 +36,27 @@ export type XvelteResponse =
     | false;
 
 export type RouteParams<T extends string> =
-    string extends T
-    ? Record<string, string>
-    : T extends `${string}:${infer Param}/${infer Rest}`
-    ? { [K in Param | keyof RouteParams<`/${Rest}`>]: string }
-    : T extends `${string}:${infer Param}`
-    ? { [K in Param]: string }
-    : {};
+    string extends T ?
+    Record<string, string> :
+    T extends `/${infer Rest}/*${infer Param}` ? { [K in Param]: string[] } & RouteParams<`/${Rest}`> :
+    T extends `/*${infer Param}` ? { [K in Param]: string[]} : 
+    T extends `/${string}/:${infer Param}/${infer Rest}` ? { [K in Param]: string } & RouteParams<`/${Rest}`> : 
+    T extends `/${string}/:${infer Param}` ? { [K in Param]: string } : 
+    T extends `/:${infer Param}/${infer Rest}` ? { [K in Param]: string } & RouteParams<`/${Rest}`> : 
+    T extends `/:${infer Param}` ? { [K in Param]: string } : {};
+
 export type IncomingMessage = IncomingMessage_ & { url: string };
 export type MaybePromise<T> = T | Promise<T>;
 
 export type XvelteHook = (event: AnyRequestEvent) => MaybePromise<AnyRequestEvent | XvelteResponse>;
 
-export type HTML = {head: string, body: string};
+export type HTML = { head: string, body: string };
+
+export type ARouteParams<T extends string> =
+    string extends T ?
+    Record<string, string> :
+    T extends `${string}:${infer Param}/${infer Rest}`
+    ? { [K in Param | keyof RouteParams<`/${Rest}`>]: string; }
+    : T extends `${string}:${infer Param}`
+    ? { [K in Param]: string; }
+    : {};

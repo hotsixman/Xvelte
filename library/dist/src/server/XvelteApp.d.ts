@@ -90,10 +90,11 @@ export declare namespace XvelteApp {
     const css = "xvelte-body, xvelte-island, xvelte-frag{display:contents;}";
     function sequence(...hooks: XvelteHook[]): XvelteHook;
     function isUsingFileBaseRouter(app: XvelteApp): boolean;
+    function toRoutePath(basename: string): string;
 }
 export declare class RequestEvent<Route extends string | RegExp> {
     url: URL;
-    params: Route extends string ? RouteParams<Route> : Record<string, string>;
+    params: Route extends string ? RouteParams<Route> : Record<string, string | string[]>;
     requestHeaders: Record<string, string>;
     locals: Record<string, any>;
     method: string;

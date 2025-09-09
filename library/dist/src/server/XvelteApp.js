@@ -92,26 +92,19 @@ export class XvelteApp {
                 try {
                     const basename = path.basename(entry).replace(/\.(.*)js$/, '');
                     const module = await import(/* @vite-ignore */ `file://${path.resolve(routesDirPath, `${encodeURIComponent(basename) || '.'}.js`)}`);
-                    const route = toRoutePath('/' + decodeURIComponent(basename));
+                    const route = XvelteApp.toRoutePath('/' + decodeURIComponent(basename));
                     if ("page" in module) {
                         this.page(route, module.page);
                     }
                     ['get', 'post', 'put', 'delete', 'all'].forEach((method) => {
-                        if (method in module) {
-                            this[method](route, module[method]);
+                        if (method.toUpperCase() in module) {
+                            this[method](route, module[method.toUpperCase()]);
                         }
                     });
                 }
                 catch (err) {
                     console.log(`${entry} is not a javascript module.`);
                 }
-            }
-            function toRoutePath(basename) {
-                return basename
-                    .replace(/index$/, '') // index는 생략
-                    .replace(/\[\.{3}.+\]/, '*') // [...all] -> *
-                    .replace(/\[(.+?)\]/g, ':$1') // [id] -> :id
-                    .replace(/\/+/g, '/');
             }
         }
         this.usingFileBaseRouter = true;
@@ -504,6 +497,13 @@ export class XvelteApp {
         return app.usingFileBaseRouter;
     }
     XvelteApp.isUsingFileBaseRouter = isUsingFileBaseRouter;
+    function toRoutePath(basename) {
+        return basename
+            .replace(/\[\.{3}(.+)\]/, '*$1') // [...all] -> *all
+            .replace(/\[(.+?)\]/g, ':$1') // [id] -> :id
+            .replace(/\/+/g, '/');
+    }
+    XvelteApp.toRoutePath = toRoutePath;
 })(XvelteApp || (XvelteApp = {}));
 class ComponentIdMap {
     map = new Map();

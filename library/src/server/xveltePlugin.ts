@@ -143,13 +143,14 @@ export default function xveltePlugin(): Plugin {
                                 entry = entry.replaceAll('\\', '/');
                                 try {
                                     const module = await server.ssrLoadModule(entry);
-                                    const route = toRoutePath(path.dirname(entry.replace(new RegExp(`^${regexpEscape(fileRouterDirPath)}`), '')));
+                                    const route = XvelteApp.toRoutePath(path.dirname(entry.replace(new RegExp(`^${regexpEscape(fileRouterDirPath)}`), '')));
                                     if ("page" in module) {
                                         devApp.page(route, module.page);
                                     }
                                     (['get', 'post', 'put', 'delete', 'all'] as const).forEach((method) => {
-                                        if (method in module) {
-                                            devApp[method](route, module[method]);
+                                        const upperCaseMethod = method.toUpperCase();
+                                        if (upperCaseMethod in module) {
+                                            devApp[method](route, module[upperCaseMethod]);
                                         }
                                     })
                                 }
@@ -176,13 +177,6 @@ export default function xveltePlugin(): Plugin {
                     next(err);
                 }
             });
-            function toRoutePath(basename: string) {
-                return basename
-                    .replace(/index$/, '')        // index는 생략
-                    .replace(/\[\.{3}.+\]/, '*')  // [...all] -> *
-                    .replace(/\[(.+?)\]/g, ':$1') // [id] -> :id
-                    .replace(/\/+/g, '/');
-            };
         },
         async handleHotUpdate({ file, server }) {
             if (path.matchesGlob(file, path.resolve(process.cwd(), 'src/**/*'))) {

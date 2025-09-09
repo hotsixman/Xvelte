@@ -109,27 +109,19 @@ export class XvelteApp {
                 try {
                     const basename = path.basename(entry).replace(/\.(.*)js$/, '');
                     const module = await import(/* @vite-ignore */`file://${path.resolve(routesDirPath, `${encodeURIComponent(basename) || '.'}.js`)}`);
-                    const route = toRoutePath('/' + decodeURIComponent(basename));
+                    const route = XvelteApp.toRoutePath('/' + decodeURIComponent(basename));
                     if ("page" in module) {
                         this.page(route, module.page)
                     }
                     (['get', 'post', 'put', 'delete', 'all'] as const).forEach((method) => {
-                        if (method in module) {
-                            this[method](route, module[method]);
+                        if (method.toUpperCase() in module) {
+                            this[method](route, module[method.toUpperCase()]);
                         }
                     })
                 }
                 catch (err) {
                     console.log(`${entry} is not a javascript module.`);
                 }
-            }
-
-            function toRoutePath(basename: string) {
-                return basename
-                    .replace(/index$/, '')        // index는 생략
-                    .replace(/\[\.{3}.+\]/, '*')  // [...all] -> *
-                    .replace(/\[(.+?)\]/g, ':$1') // [id] -> :id
-                    .replace(/\/+/g, '/');
             }
         }
         this.usingFileBaseRouter = true;
@@ -559,6 +551,12 @@ export namespace XvelteApp {
         //@ts-expect-error
         return app.usingFileBaseRouter;
     }
+    export function toRoutePath(basename: string) {
+        return basename
+            .replace(/\[\.{3}(.+)\]/, '*$1')  // [...all] -> *all
+            .replace(/\[(.+?)\]/g, ':$1') // [id] -> :id
+            .replace(/\/+/g, '/');
+    }
 }
 
 class ComponentIdMap {
@@ -589,7 +587,7 @@ class ComponentIdMap {
 export class RequestEvent<Route extends string | RegExp> {
     url: URL;
     //@ts-expect-error
-    params: Route extends string ? RouteParams<Route> : Record<string, string>;
+    params: Route extends string ? RouteParams<Route> : Record<string, string | string[]>;
     requestHeaders: Record<string, string>;
     locals: Record<string, any> = {};
     method: string;
